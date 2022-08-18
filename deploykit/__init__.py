@@ -272,17 +272,21 @@ class DeployHost:
         bash_cmd = export_cmd
         bash_args = []
         if isinstance(cmd, list):
-            bash_cmd += "$@"
-            bash_args = cmd
+            bash_cmd += 'exec "$@"'
+            # argv0
+            bash_args.append("bash")
+            bash_args += cmd
         else:
             bash_cmd += cmd
         # FIXME we assume bash to be present here? Should be documented...
         ssh_cmd = (
             ["ssh", f"{self.user}@{self.host}", "-p", str(self.port)]
             + ssh_opts
-            + ["--", f"{sudo}bash -c {quote(bash_cmd)} {' '.join(map(quote, bash_args))}"]
+            + [
+                "--",
+                f"{sudo}bash -c {quote(bash_cmd)} {' '.join(map(quote, bash_args))}",
+            ]
         )
-        breakpoint()
         return self._run(
             ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check
         )
