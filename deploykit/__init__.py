@@ -184,8 +184,8 @@ class DeployHost:
         @cmd the commmand to run
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-        @extra_env: environment variables to override whe running the command
-        @cwd: current working directory to run the process in
+        @extra_env environment variables to override whe running the command
+        @cwd current working directory to run the process in
 
         @return subprocess.CompletedProcess result of the command
         """
@@ -215,8 +215,8 @@ class DeployHost:
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @become_root if the ssh_user is not root than sudo is prepended
-        @extra_env: environment variables to override whe running the command
-        @cwd: current working directory to run the process in
+        @extra_env environment variables to override whe running the command
+        @cwd current working directory to run the process in
 
         @return subprocess.CompletedProcess result of the ssh command
         """
@@ -348,7 +348,7 @@ class DeployGroup:
         Command to run on the remote host via ssh
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-        @cwd: current working directory to run the process in
+        @cwd current working directory to run the process in
 
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
@@ -369,8 +369,8 @@ class DeployGroup:
         @cmd the commmand to run
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-        @cwd: current working directory to run the process in
-        @extra_env: environment variables to override whe running the command
+        @cwd current working directory to run the process in
+        @extra_env environment variables to override whe running the command
 
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
@@ -405,6 +405,7 @@ class DeployGroup:
             thread.join()
         return results
 
+    )
 
 def parse_hosts(
     hosts: str,
@@ -416,11 +417,11 @@ def parse_hosts(
     """
     Parse comma seperated string of hosts
 
-    @hosts: A comma seperated list of hostnames with optional username (defaulting to root) i.e. admin@node1.example.com,admin@node2.example.com
-    @host_key_check: wether to check ssh host keys
-    @forward_agent: wether to forward the ssh agent
-    @domain_suffix: a string to append to each hostname, i.e. hosts=admin@node0, domain_suffix=example.com -> admin@node0.example.com
-    @default_user: user to choose if no ssh user is specified with the hostname
+    @hosts A comma seperated list of hostnames with optional username (defaulting to root) i.e. admin@node1.example.com,admin@node2.example.com
+    @host_key_check wether to check ssh host keys
+    @forward_agent wether to forward the ssh agent
+    @domain_suffix a string to append to each hostname, i.e. hosts=admin@node0, domain_suffix=example.com -> admin@node0.example.com
+    @default_user user to choose if no ssh user is specified with the hostname
 
     @return A deploy group containing all hosts specified in hosts
     """
