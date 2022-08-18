@@ -249,7 +249,7 @@ DeployResults = List[Tuple[DeployHost, subprocess.CompletedProcess[Text]]]
 T = TypeVar("T")
 
 
-def worker(
+def _worker(
     func: Callable[[DeployHost], T],
     host: DeployHost,
     results: List[Tuple[DeployHost, Union[T, Exception]]],
@@ -393,7 +393,7 @@ class DeployGroup:
         ]
         for i, host in enumerate(self.hosts):
             thread = Thread(
-                target=worker,
+                target=_worker,
                 args=(func, host, results, i),
             )
             threads.append(thread)
