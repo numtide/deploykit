@@ -1,8 +1,9 @@
 with import <nixpkgs> {};
 mkShell {
-  buildInputs = [
-    python3.pkgs.flake8
+  checkInputs = [
+    openssh
     mypy
+    python3.pkgs.flake8
   ];
   nativeBuildInputs = [
     bashInteractive
