@@ -148,12 +148,16 @@ class DeployHost:
             elif stderr == subprocess.PIPE:
                 stderr_read, stderr_write = stack.enter_context(_pipe())
 
+            env = os.environ.copy()
+            env.update(extra_env)
+
             with subprocess.Popen(
                 cmd,
                 text=True,
                 shell=shell,
                 stdout=stdout_write,
                 stderr=stderr_write,
+                env=env,
                 cwd=cwd,
             ) as p:
                 write_fd.close()
