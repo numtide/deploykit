@@ -131,6 +131,7 @@ class DeployHost:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True
     ) -> subprocess.CompletedProcess[Text]:
         with ExitStack() as stack:
             if stdout is None or stderr is None:
@@ -169,6 +170,8 @@ class DeployHost:
                     read_fd, stdout_read, stderr_read
                 )
                 ret = p.wait()
+                if check and ret != 0:
+                    raise subprocess.CalledProcessError(ret, cmd=cmd, output=stdout_data, stderr=stderr_data)
                 return subprocess.CompletedProcess(
                     cmd, ret, stdout=stdout_data, stderr=stderr_data
                 )
@@ -181,6 +184,7 @@ class DeployHost:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True,
     ) -> subprocess.CompletedProcess:
         """
         Command to run locally for the host
@@ -201,6 +205,7 @@ class DeployHost:
             stderr=stderr,
             extra_env=extra_env,
             cwd=cwd,
+            check=check
         )
 
     def run(
@@ -211,6 +216,7 @@ class DeployHost:
         become_root: bool = False,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True,
     ) -> subprocess.CompletedProcess:
         """
         Command to run on the host via ssh
@@ -245,7 +251,7 @@ class DeployHost:
             + ssh_opts
             + ["--", f"{sudo} bash -c {quote(cmd)}"]
         )
-        return self._run(ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd)
+        return self._run(ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check)
 
 
 DeployResults = List[Tuple[DeployHost, subprocess.CompletedProcess[Text]]]
@@ -278,6 +284,7 @@ class DeployGroup:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True,
     ) -> None:
         results.append(
             (
@@ -297,6 +304,7 @@ class DeployGroup:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True,
     ) -> None:
         results.append(
             (
@@ -315,6 +323,7 @@ class DeployGroup:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True,
     ) -> DeployResults:
         results: DeployResults = []
         threads = []
@@ -330,6 +339,7 @@ class DeployGroup:
                     stderr=stderr,
                     extra_env=extra_env,
                     cwd=cwd,
+                    check=check,
                 ),
             )
             thread.start()
@@ -347,6 +357,7 @@ class DeployGroup:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True,
     ) -> DeployResults:
         """
         Command to run on the remote host via ssh
@@ -357,7 +368,7 @@ class DeployGroup:
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
         return self._run(
-            cmd, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd
+            cmd, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd, check=check
         )
 
     def run_local(
@@ -367,6 +378,7 @@ class DeployGroup:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
+        check: bool = True,
     ) -> DeployResults:
         """
         Command to run locally for each host in the group in parallel
@@ -379,11 +391,17 @@ class DeployGroup:
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
         return self._run(
-            cmd, local=True, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd
+            cmd,
+            local=True,
+            stdout=stdout,
+            stderr=stderr,
+            extra_env=extra_env,
+            cwd=cwd,
+            check=check,
         )
 
     def run_function(
-        self, func: Callable[[DeployHost], T]
+        self, func: Callable[[DeployHost], T], check: bool = True
     ) -> List[Tuple[DeployHost, Union[T, Exception]]]:
         """
         Function to run for each host in the group in parallel
