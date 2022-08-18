@@ -184,7 +184,7 @@ class DeployHost:
 
     def run_local(
         self,
-        cmd: str,
+        cmd: Union[str, List[str]],
         stdout: FILE = None,
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
@@ -202,10 +202,14 @@ class DeployHost:
 
         @return subprocess.CompletedProcess result of the command
         """
-        print(f"[{self.command_prefix}] {cmd}")
+        shell = False
+        if isinstance(cmd, str):
+            cmd = [cmd]
+            shell = True
+        print(f"[{self.command_prefix}] {' '.join(cmd)}")
         return self._run(
-            [cmd],
-            shell=True,
+            cmd,
+            shell=shell,
             stdout=stdout,
             stderr=stderr,
             extra_env=extra_env,
@@ -215,7 +219,7 @@ class DeployHost:
 
     def run(
         self,
-        cmd: str,
+        cmd: Union[str, List[str]],
         stdout: FILE = None,
         stderr: FILE = None,
         become_root: bool = False,
@@ -240,10 +244,15 @@ class DeployHost:
             sudo = "sudo"
         vars = []
         for k, v in extra_env.items():
-            vars.append(f"export {shlex.quote(k)}={shlex.quote(v)};")
+            vars.append(f"{shlex.quote(k)}={shlex.quote(v)}")
+
+        print(f"[{self.command_prefix}] ", end="")
+        export_cmd = ""
         if vars:
-            cmd = f"{' '.join(vars)} {cmd}"
-        print(f"[{self.command_prefix}] {cmd}")
+            export_cmd = f"export {' '.join(vars)}; "
+            print(export_cmd, end="")
+        print(cmd)
+
         ssh_opts = ["-A"] if self.forward_agent else []
 
         if self.host_key_check != HostKeyCheck.STRICT:
@@ -251,10 +260,18 @@ class DeployHost:
         if self.host_key_check == HostKeyCheck.NONE:
             ssh_opts.extend(["-o", "UserKnownHostsFile=/dev/null"])
 
+        bash_cmd = ""
+        bash_args = []
+        if isinstance(cmd, list):
+            bash_cmd = f"{export_cmd} $@"
+            bash_args = cmd
+        else:
+            bash_cmd = f"{export_cmd} {cmd}"
+        # FIXME we assume bash to be present here? Should be documented...
         ssh_cmd = (
             ["ssh", f"{self.user}@{self.host}", "-p", str(self.port)]
             + ssh_opts
-            + ["--", f"{sudo} bash -c {quote(cmd)}"]
+            + ["--", f"{sudo} -- bash -c {bash_cmd} {' '.join(map(quote, bash_args))}"]
         )
         return self._run(
             ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check
@@ -309,7 +326,7 @@ class DeployGroup:
 
     def _run_local(
         self,
-        cmd: str,
+        cmd: Union[str, List[str]],
         host: DeployHost,
         results: DeployResults,
         stdout: FILE = None,
@@ -333,7 +350,7 @@ class DeployGroup:
 
     def _run_remote(
         self,
-        cmd: str,
+        cmd: Union[str, List[str]],
         host: DeployHost,
         results: DeployResults,
         stdout: FILE = None,
@@ -362,7 +379,7 @@ class DeployGroup:
 
     def _run(
         self,
-        cmd: str,
+        cmd: Union[str, List[str]],
         local: bool = False,
         stdout: FILE = None,
         stderr: FILE = None,
@@ -400,7 +417,7 @@ class DeployGroup:
 
     def run(
         self,
-        cmd: str,
+        cmd: Union[str, List[str]],
         stdout: FILE = None,
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
@@ -421,7 +438,7 @@ class DeployGroup:
 
     def run_local(
         self,
-        cmd: str,
+        cmd: Union[str, List[str]],
         stdout: FILE = None,
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},

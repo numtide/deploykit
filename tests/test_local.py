@@ -71,3 +71,9 @@ def test_run_function_exception() -> None:
         pass
     else:
         assert False, "should have raised Exception"
+
+
+def test_run_local_non_shell() -> None:
+    hosts = parse_hosts("some_host")
+    p2 = hosts.run_local(["echo", "1"], stdout=subprocess.PIPE)
+    assert p2[0].result.stdout == "1\n"
