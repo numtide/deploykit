@@ -147,12 +147,16 @@ class DeployHost:
                 stdout_write = write_fd
             elif stdout == subprocess.PIPE:
                 stdout_read, stdout_write = stack.enter_context(_pipe())
+            else:
+                raise Exception(f"unsupported value for stdout parameter: {stdout}")
 
             if stderr is None:
                 stderr_read = None
                 stderr_write = write_fd
             elif stderr == subprocess.PIPE:
                 stderr_read, stderr_write = stack.enter_context(_pipe())
+            else:
+                raise Exception(f"unsupported value for stderr parameter: {stderr}")
 
             env = os.environ.copy()
             env.update(extra_env)
@@ -243,7 +247,7 @@ class DeployHost:
         """
         sudo = ""
         if become_root and self.user != "root":
-            sudo = "sudo"
+            sudo = "sudo -- "
         vars = []
         for k, v in extra_env.items():
             vars.append(f"{shlex.quote(k)}={shlex.quote(v)}")
@@ -265,19 +269,20 @@ class DeployHost:
         if self.host_key_check == HostKeyCheck.NONE:
             ssh_opts.extend(["-o", "UserKnownHostsFile=/dev/null"])
 
-        bash_cmd = ""
+        bash_cmd = export_cmd
         bash_args = []
         if isinstance(cmd, list):
-            bash_cmd = f"{export_cmd} $@"
+            bash_cmd += "$@"
             bash_args = cmd
         else:
-            bash_cmd = f"{export_cmd} {cmd}"
+            bash_cmd += cmd
         # FIXME we assume bash to be present here? Should be documented...
         ssh_cmd = (
             ["ssh", f"{self.user}@{self.host}", "-p", str(self.port)]
             + ssh_opts
-            + ["--", f"{sudo} -- bash -c {bash_cmd} {' '.join(map(quote, bash_args))}"]
+            + ["--", f"{sudo}bash -c {quote(bash_cmd)} {' '.join(map(quote, bash_args))}"]
         )
+        breakpoint()
         return self._run(
             ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check
         )
