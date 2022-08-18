@@ -10,6 +10,9 @@ from pathlib import Path
 import shlex
 from typing import (
     IO,
+    overload,
+    Literal,
+    Type,
     Any,
     Callable,
     Dict,
@@ -427,16 +430,39 @@ class DeployGroup:
             thread.join()
         return results
 
+@overload
+def run(
+    cmd: Union[List[str], str],
+    text:  Literal[True] = ...,
+    stdout: FILE = ...,
+    stderr: FILE = ...,
+    extra_env: Dict[str, str] = ...,
+    cwd: Union[None, str, Path] = ...,
+    check: bool = ...,
+) -> subprocess.CompletedProcess[str]:
+    ...
+
+@overload
+def run(
+    cmd: Union[List[str], str],
+    text: Literal[False],
+    stdout: FILE = ...,
+    stderr: FILE = ...,
+    extra_env: Dict[str, str] = ...,
+    cwd: Union[None, str, Path] = ...,
+    check: bool = ...,
+) -> subprocess.CompletedProcess[bytes]:
+    ...
 
 def run(
     cmd: Union[List[str], str],
+    text: bool = True,
     stdout: FILE = None,
     stderr: FILE = None,
     extra_env: Dict[str, str] = {},
     cwd: Union[None, str, Path] = None,
     check: bool = True,
-    text: bool = True,
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[Any]:
     """
     Run command locally
 
@@ -444,6 +470,7 @@ def run(
          otherwise if it is a list, than the first list element is the command
          and the remaining list elements are passed as arguments to the
          command.
+    @text when true, file objects for stdout and stderr are opened in text mode.
     @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
     @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
     @extra_env environment variables to override whe running the command
@@ -452,7 +479,6 @@ def run(
            CalledProcessError exception will be raised. Attributes of that exception
            hold the arguments, the exit code, and stdout and stderr if they were
            captured.
-    @text when true, file objects for stdout and stderr are opened in text mode.
     """
     if isinstance(cmd, list):
         print(" ".join(cmd))
