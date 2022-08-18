@@ -29,6 +29,11 @@ def test_run_environment() -> None:
     )
     assert p2[0].result.stdout == "true\n"
 
+    p3 = hosts.run_local(
+        ["env"], extra_env=dict(env_var="true"), stdout=subprocess.PIPE
+    )
+    assert "env_var=true" in p3[0].result.stdout
+
 
 def test_run_non_shell() -> None:
     p = run(["echo", "$hello"], stdout=subprocess.PIPE)
@@ -50,7 +55,7 @@ def test_run_function() -> None:
     assert res[0].result == True
 
 
-def test_run_local_exception() -> None:
+def test_run_exception() -> None:
     hosts = parse_hosts("some_host")
     try:
         hosts.run_local("exit 1")
