@@ -60,6 +60,7 @@ class DeployHost:
         host: str,
         user: str = "root",
         port: int = 22,
+        key: Optional[str] = None,
         forward_agent: bool = False,
         command_prefix: Optional[str] = None,
         host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
@@ -77,6 +78,7 @@ class DeployHost:
         self.host = host
         self.user = user
         self.port = port
+        self.key = key
         if command_prefix:
             self.command_prefix = command_prefix
         else:
@@ -254,6 +256,9 @@ class DeployHost:
         print(cmd)
 
         ssh_opts = ["-A"] if self.forward_agent else []
+
+        if self.key:
+            ssh_opts.extend(["-i", self.key])
 
         if self.host_key_check != HostKeyCheck.STRICT:
             ssh_opts.extend(["-o", "StrictHostKeyChecking=no"])
@@ -569,6 +574,7 @@ def run(
 def parse_hosts(
     hosts: str,
     host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
+    key: Optional[str] = None,
     forward_agent: bool = False,
     domain_suffix: str = "",
     default_user: str = "root",
@@ -603,6 +609,7 @@ def parse_hosts(
                 hostname + domain_suffix,
                 user=user,
                 port=port,
+                key=key,
                 host_key_check=host_key_check,
                 forward_agent=forward_agent,
             )
