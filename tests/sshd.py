@@ -1,24 +1,27 @@
 import pytest
 import shutil
 import subprocess
+import time
 from pathlib import Path
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from tempfile import TemporaryDirectory
 from typing import Iterator
 
-from ports import Ports
+from ports import Ports, check_port
 from command import Command
 
 
 class Sshd:
-    def __init__(self, port: int, proc: subprocess.Popen) -> None:
+    def __init__(self, port: int, proc: subprocess.Popen, key: str) -> None:
         self.port = port
         self.proc = proc
+        self.key = key
 
 
 @pytest.fixture
-def sshd(command: Command, ports: Ports) -> Iterator[Sshd]:
+def sshd(command: Command, ports: Ports, project_root: Path) -> Iterator[Sshd]:
     """ """
-    with TemporaryDirectory() as _dir:
+    # FIXME, if any parent of `project_root` is world-writable than sshd will refuse it.
+    with TemporaryDirectory(dir=project_root) as _dir:
         dir = Path(_dir)
         host_key = dir / "host_ssh_host_ed25519_key"
         proc = command.run(
@@ -33,18 +36,25 @@ def sshd(command: Command, ports: Ports) -> Iterator[Sshd]:
             ]
         )
         proc.wait()
+
         sshd_config = dir / "sshd_config"
-        sshd_config.write_text(f"HostKey {host_key}")
+        sshd_config.write_text(
+            f"""
+        HostKey {host_key}
+        AuthorizedKeysFile {host_key}.pub
+        """
+        )
 
         port = ports.allocate(1)
         sshd = shutil.which("sshd")
-        proc = command.run(
-            [sshd, "-f", str(sshd_config), "-D", "-d", "-p", str(port), "-6"],
-            stderr=subprocess.PIPE,
-        )
-        assert proc.stderr is not None
-        for line in proc.stderr:
-            if "Server listening on ::" in line:
-                yield Sshd(port, proc)
-            print(line, end="")
-        raise RuntimeError("Could not start sshd")
+        proc = command.run([sshd, "-f", str(sshd_config), "-D", "-p", str(port), "-6"])
+
+        while True:
+            if check_port(port):
+                yield Sshd(port, proc, str(host_key))
+                return
+            else:
+                rc = proc.poll()
+                if rc is not None:
+                    raise Exception(f"sshd processes was terminated with {rc}")
+                time.sleep(0.1)
