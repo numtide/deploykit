@@ -12,7 +12,7 @@ from typing import (
     IO,
     overload,
     Literal,
-    Type,
+    Generic,
     Any,
     Callable,
     Dict,
@@ -134,8 +134,8 @@ class DeployHost:
         stderr: FILE = None,
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
-        check: bool = True
-    ) -> subprocess.CompletedProcess[Text]:
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
         with ExitStack() as stack:
             if stdout is None or stderr is None:
                 read_fd, write_fd = stack.enter_context(_pipe())
@@ -174,7 +174,9 @@ class DeployHost:
                 )
                 ret = p.wait()
                 if check and ret != 0:
-                    raise subprocess.CalledProcessError(ret, cmd=cmd, output=stdout_data, stderr=stderr_data)
+                    raise subprocess.CalledProcessError(
+                        ret, cmd=cmd, output=stdout_data, stderr=stderr_data
+                    )
                 return subprocess.CompletedProcess(
                     cmd, ret, stdout=stdout_data, stderr=stderr_data
                 )
@@ -188,7 +190,7 @@ class DeployHost:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
-    ) -> subprocess.CompletedProcess:
+    ) -> subprocess.CompletedProcess[str]:
         """
         Command to run locally for the host
 
@@ -208,7 +210,7 @@ class DeployHost:
             stderr=stderr,
             extra_env=extra_env,
             cwd=cwd,
-            check=check
+            check=check,
         )
 
     def run(
@@ -220,7 +222,7 @@ class DeployHost:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
-    ) -> subprocess.CompletedProcess:
+    ) -> subprocess.CompletedProcess[str]:
         """
         Command to run on the host via ssh
 
@@ -254,24 +256,51 @@ class DeployHost:
             + ssh_opts
             + ["--", f"{sudo} bash -c {quote(cmd)}"]
         )
-        return self._run(ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check)
+        return self._run(
+            ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check
+        )
 
-
-DeployResults = List[Tuple[DeployHost, subprocess.CompletedProcess[Text]]]
 
 T = TypeVar("T")
+
+
+class HostResult(Generic[T]):
+    def __init__(self, host: DeployHost, result: Union[T, Exception]) -> None:
+        self.host = host
+        self._result = result
+
+    @property
+    def error(self) -> Optional[Exception]:
+        """
+        Returns an error if the command failed
+        """
+        if isinstance(self._result, Exception):
+            return self._result
+        return None
+
+    @property
+    def result(self) -> T:
+        """
+        Unwrap the result
+        """
+        if isinstance(self._result, Exception):
+            raise Exception
+        return self._result
+
+
+DeployResults = List[HostResult[subprocess.CompletedProcess[str]]]
 
 
 def _worker(
     func: Callable[[DeployHost], T],
     host: DeployHost,
-    results: List[Tuple[DeployHost, Union[T, Exception]]],
+    results: List[HostResult[T]],
     idx: int,
 ) -> None:
     try:
-        results[idx] = (host, func(host))
+        results[idx] = HostResult(host, func(host))
     except Exception as e:
-        results[idx] = (host, e)
+        results[idx] = HostResult(host, e)
 
 
 class DeployGroup:
@@ -289,14 +318,18 @@ class DeployGroup:
         cwd: Union[None, str, Path] = None,
         check: bool = True,
     ) -> None:
-        results.append(
-            (
-                host,
-                host.run_local(
-                    cmd, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd
-                ),
+        try:
+            proc = host.run_local(
+                cmd,
+                stdout=stdout,
+                stderr=stderr,
+                extra_env=extra_env,
+                cwd=cwd,
+                check=check,
             )
-        )
+            results.append(HostResult(host, proc))
+        except Exception as e:
+            results.append(HostResult(host, e))
 
     def _run_remote(
         self,
@@ -309,14 +342,18 @@ class DeployGroup:
         cwd: Union[None, str, Path] = None,
         check: bool = True,
     ) -> None:
-        results.append(
-            (
-                host,
-                host.run(
-                    cmd, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd
-                ),
+        try:
+            proc = host.run(
+                cmd,
+                stdout=stdout,
+                stderr=stderr,
+                extra_env=extra_env,
+                cwd=cwd,
+                check=check,
             )
-        )
+            results.append(HostResult(host, proc))
+        except Exception as e:
+            results.append(HostResult(host, e))
 
     def _run(
         self,
@@ -405,15 +442,15 @@ class DeployGroup:
 
     def run_function(
         self, func: Callable[[DeployHost], T], check: bool = True
-    ) -> List[Tuple[DeployHost, Union[T, Exception]]]:
+    ) -> List[HostResult[T]]:
         """
         Function to run for each host in the group in parallel
 
         @func the function to call
         """
         threads = []
-        results: List[Tuple[DeployHost, Union[T, Exception]]] = [
-            (h, Exception(f"No result set for thread {i}"))
+        results: List[HostResult] = [
+            HostResult(h, Exception(f"No result set for thread {i}"))
             for (i, h) in enumerate(self.hosts)
         ]
         for i, host in enumerate(self.hosts):
@@ -428,12 +465,17 @@ class DeployGroup:
 
         for thread in threads:
             thread.join()
+        if check:
+            for result in results:
+                if result.error:
+                    raise result.error
         return results
+
 
 @overload
 def run(
     cmd: Union[List[str], str],
-    text:  Literal[True] = ...,
+    text: Literal[True] = ...,
     stdout: FILE = ...,
     stderr: FILE = ...,
     extra_env: Dict[str, str] = ...,
@@ -441,6 +483,7 @@ def run(
     check: bool = ...,
 ) -> subprocess.CompletedProcess[str]:
     ...
+
 
 @overload
 def run(
@@ -453,6 +496,7 @@ def run(
     check: bool = ...,
 ) -> subprocess.CompletedProcess[bytes]:
     ...
+
 
 def run(
     cmd: Union[List[str], str],

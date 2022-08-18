@@ -15,8 +15,9 @@ def test_run_failure() -> None:
     try:
         p = run("exit 1")
     except subprocess.CalledProcessError:
-        return
-    assert False, "Command should have raised an error"
+        pass
+    else:
+        assert False, "Command should have raised an error"
 
 
 def test_run_environment() -> None:
@@ -27,7 +28,7 @@ def test_run_environment() -> None:
     p2 = hosts.run_local(
         "echo $env_var", extra_env=dict(env_var="true"), stdout=subprocess.PIPE
     )
-    assert p2[0][1].stdout == "true\n"
+    assert p2[0].result.stdout == "true\n"
 
 
 def test_run_non_shell() -> None:
@@ -47,4 +48,17 @@ def test_run_function() -> None:
 
     hosts = parse_hosts("some_host")
     res = hosts.run_function(some_func)
-    assert res[0][1] == True
+    assert res[0].result == True
+
+
+def test_run_function_exception() -> None:
+    def some_func(h: DeployHost) -> None:
+        h.run_local("exit 1")
+
+    hosts = parse_hosts("some_host")
+    try:
+        hosts.run_function(some_func)
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        assert False, "Should have raised Exception"
