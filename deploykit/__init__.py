@@ -593,10 +593,16 @@ def parse_hosts(
         else:
             user = default_user
             hostname = parts[0]
+        maybe_port = hostname.split(":")
+        port = 22
+        if len(maybe_port) > 1:
+            hostname = maybe_port[0]
+            port = int(maybe_port[1])
         deploy_hosts.append(
             DeployHost(
                 hostname + domain_suffix,
                 user=user,
+                port=port,
                 host_key_check=host_key_check,
                 forward_agent=forward_agent,
             )
