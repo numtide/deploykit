@@ -355,6 +355,11 @@ class DeployGroup:
         except Exception as e:
             results.append(HostResult(host, e))
 
+    def _reraise_errors(self, results: List[HostResult]) -> None:
+        for result in results:
+            if result.error:
+                raise result.error
+
     def _run(
         self,
         cmd: str,
@@ -387,6 +392,9 @@ class DeployGroup:
 
         for thread in threads:
             thread.join()
+
+        if check:
+            self._reraise_errors(results)
 
         return results
 
@@ -466,9 +474,7 @@ class DeployGroup:
         for thread in threads:
             thread.join()
         if check:
-            for result in results:
-                if result.error:
-                    raise result.error
+            self._reraise_errors(results)
         return results
 
 

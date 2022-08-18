@@ -1,4 +1,3 @@
-from sshd import Sshd
 from deploykit import parse_hosts, run, DeployHost
 import subprocess
 
@@ -51,6 +50,16 @@ def test_run_function() -> None:
     assert res[0].result == True
 
 
+def test_run_local_exception() -> None:
+    hosts = parse_hosts("some_host")
+    try:
+        hosts.run_local("exit 1")
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        assert False, "should have raised Exception"
+
+
 def test_run_function_exception() -> None:
     def some_func(h: DeployHost) -> None:
         h.run_local("exit 1")
@@ -61,4 +70,4 @@ def test_run_function_exception() -> None:
     except subprocess.CalledProcessError:
         pass
     else:
-        assert False, "Should have raised Exception"
+        assert False, "should have raised Exception"
