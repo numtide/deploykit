@@ -1,8 +1,11 @@
 # Deploykit
 
-Execute commands remotely and locally in parallel for a group of hosts with
-python. It is meant for short automation tasks. Each line of the output of each
-command is prefixed by the hostname of the target.
+A Python library that executes commands in parallel, locally and remotely,
+over a group of hosts.
+
+This library has been extracted from existing projects where it was used as a
+basis to create deployment scripts. It's a bit like a mini Ansible, without
+the YAML overhead, and usable as a simple composable library.
 
 Here are some important facts about deploykit:
 
@@ -14,10 +17,11 @@ Here are some important facts about deploykit:
 - Threaded: Deploykit starts a thread per target host run commands and
   user-defined functions and collects their results for inspection. To run
   commands, deploykit wraps around python's subprocess API.
+- Clean output: command outputs are prefixed by the hostname of the target.
 
 ## Example
 
-```
+```python
 from deploykit import parse_hosts, subprocess.
 
 hosts = parse_hosts("server1,server2,server3")
@@ -39,7 +43,18 @@ A more comprehensive example explaining all the concepts of the API can be found
     combination with the same.
 - [Ansible](https://ansible.org): 
   - Deploykit is more lightweight and has a faster startup time.
-  - Using python for task definitions allows for more flexibility than yaml.
+  - Using python for task definitions allows for more flexibility than YAML.
   - Use ansible if you need declarative configuration management. Use deploykit
     if you want to imperatively quickly execute a series of commands on a number
     of hosts.
+
+## Contributing
+
+Contributions and discussions are welcome. Please make sure to send a WIP PR
+or issue before doing large refactors, so your work doesn't get wasted (in
+case of disagreement).
+
+## License
+
+This project is copyright Numtide and contributors, and licensed under the
+[MIT](LICENSE).
