@@ -19,7 +19,6 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Text,
     Tuple,
     Union,
     TypeVar,
@@ -88,9 +87,14 @@ class DeployHost:
         self.meta = meta
 
     def _prefix_output(
-        self, print_fd: IO[str], stdout: Optional[IO[str]], stderr: Optional[IO[str]]
+        self,
+        print_fd: Optional[IO[str]],
+        stdout: Optional[IO[str]],
+        stderr: Optional[IO[str]],
     ) -> Tuple[str, str]:
-        rlist = [print_fd]
+        rlist = []
+        if print_fd is not None:
+            rlist.append(print_fd)
         if stdout is not None:
             rlist.append(stdout)
 
@@ -104,7 +108,7 @@ class DeployHost:
         while len(rlist) != 0:
             r, _, _ = select.select(rlist, [], [])
 
-            if print_fd in r:
+            if print_fd in r and print_fd is not None:
                 read = os.read(print_fd.fileno(), 4096)
                 if len(read) == 0:
                     rlist.remove(print_fd)
@@ -139,6 +143,7 @@ class DeployHost:
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         with ExitStack() as stack:
+            read_fd, write_fd = (None, None)
             if stdout is None or stderr is None:
                 read_fd, write_fd = stack.enter_context(_pipe())
 
@@ -170,10 +175,13 @@ class DeployHost:
                 env=env,
                 cwd=cwd,
             ) as p:
-                write_fd.close()
+                if write_fd is not None:
+                    write_fd.close()
                 if stdout == subprocess.PIPE:
+                    assert stdout_write is not None
                     stdout_write.close()
                 if stderr == subprocess.PIPE:
+                    assert stderr_write is not None
                     stderr_write.close()
                 stdout_data, stderr_data = self._prefix_output(
                     read_fd, stdout_read, stderr_read
