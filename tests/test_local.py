@@ -39,6 +39,10 @@ def test_run_non_shell() -> None:
     p = run(["echo", "$hello"], stdout=subprocess.PIPE)
     assert p.stdout == "$hello\n"
 
+def test_run_stderr_stdout() -> None:
+    p = run("echo 1; echo 2 >&2", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert p.stdout == "1\n"
+    assert p.stderr == "2\n"
 
 def test_run_local() -> None:
     hosts = parse_hosts("some_host")
