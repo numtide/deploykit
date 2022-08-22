@@ -1,11 +1,11 @@
 with import <nixpkgs> {};
 mkShell {
-  checkInputs = [
+  nativeBuildInputs = [
+    bashInteractive
     openssh
     mypy
     python3.pkgs.flake8
-  ];
-  nativeBuildInputs = [
-    bashInteractive
+    python3.pkgs.black
+    python3.pkgs.pytest
   ];
 }
