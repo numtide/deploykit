@@ -315,7 +315,7 @@ class HostResult(Generic[T]):
         Unwrap the result
         """
         if isinstance(self._result, Exception):
-            raise Exception
+            raise self._result
         return self._result
 
 
