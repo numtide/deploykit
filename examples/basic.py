@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import subprocess
 from deploykit import run, parse_hosts, DeployHost
 import argparse
 
@@ -16,9 +17,9 @@ def deploy(host: DeployHost) -> None:
     host.run("hostname")
 
     # We can also use our `DeployHost` object to get connection info for other ssh hosts
-    #host.run_local(
+    # host.run_local(
     #    f"rsync {' --exclude -vaF --delete -e ssh . {host.user}@{host.host}:/etc/nixos"
-    #)
+    # )
 
 
 def main() -> None:
@@ -48,6 +49,16 @@ def main() -> None:
     # This function runs in parallel for all hosts. This is useful if you want
     # to run a series of commands per host.
     g.run_function(deploy)
+
+    # By default all functions will throw a subprocess.CalledProcess exception if a command fails.
+    # When check=False is passed, instead a subprocess.CompletedProcess value is returned and the user
+    # can check the result of command by inspecting the `returncode` attribute
+    runs = g.run_local("false", check=False)
+    print(runs[0].result.returncode)
+
+    # To capture the output of a command, set stdout/stderr parameter
+    runs = g.run_local("hostname", stdout=subprocess.PIPE)
+    print(runs[0].result.stdout)
 
 
 if __name__ == "__main__":
