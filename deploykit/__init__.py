@@ -62,6 +62,8 @@ class DeployHost:
         key: Optional[str] = None,
         forward_agent: bool = False,
         command_prefix: Optional[str] = None,
+        out_logger: Callable[[Any], Any] = print,
+        err_logger: Callable[[Any], Any] = print,
         host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
         meta: Dict[str, Any] = {},
     ) -> None:
@@ -71,6 +73,8 @@ class DeployHost:
         @port the port to connect to via ssh
         @forward_agent: wheter to forward ssh agent
         @command_prefix: string to prefix each line of the command output with, defaults to host
+        @out_logger: logging function (taking at least one string as parameter) to print a commands `stdout` with
+        @err_logger: logging function (taking at least one string as parameter) to print a commands `stderr` with
         @host_key_check: wether to check ssh host keys
         @meta: meta attributes associated with the host. Those can be accessed in custom functions passed to `run_function`
         """
@@ -82,6 +86,8 @@ class DeployHost:
             self.command_prefix = command_prefix
         else:
             self.command_prefix = host
+        self.out_logger = out_logger
+        self.err_logger = err_logger
         self.forward_agent = forward_agent
         self.host_key_check = host_key_check
         self.meta = meta
@@ -116,7 +122,7 @@ class DeployHost:
                 if read == b"" or "\n" in print_buf:
                     lines = print_buf.rstrip("\n").split("\n")
                     for line in lines:
-                        print(f"[{self.command_prefix}] {line}")
+                        self.out_logger(f"[{self.command_prefix}] {line}")
                     print_buf = ""
 
             def handle_fd(fd: Optional[IO[Any]]) -> str:
@@ -596,6 +602,8 @@ def parse_hosts(
     forward_agent: bool = False,
     domain_suffix: str = "",
     default_user: str = "root",
+    out_logger: Callable[[Any], Any] = print,
+    err_logger: Callable[[Any], Any] = print,
 ) -> DeployGroup:
     """
     Parse comma seperated string of hosts
@@ -604,6 +612,8 @@ def parse_hosts(
     @host_key_check wether to check ssh host keys
     @forward_agent wether to forward the ssh agent
     @domain_suffix a string to append to each hostname, i.e. hosts=admin@node0, domain_suffix=example.com -> admin@node0.example.com
+    @out_logger: logging function (taking at least one string as parameter) to print a commands `stdout` with
+    @err_logger: logging function (taking at least one string as parameter) to print a commands `stderr` with
     @default_user user to choose if no ssh user is specified with the hostname
 
     @return A deploy group containing all hosts specified in hosts
@@ -630,6 +640,8 @@ def parse_hosts(
                 key=key,
                 host_key_check=host_key_check,
                 forward_agent=forward_agent,
+                out_logger = out_logger,
+                err_logger = err_logger,
             )
         )
     return DeployGroup(deploy_hosts)
