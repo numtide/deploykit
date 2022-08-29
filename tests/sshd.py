@@ -82,10 +82,29 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
         bash = shutil.which("bash")
         assert bash is not None
         env = dict(LD_PRELOAD=str(sshd_config.preload_lib), LOGIN_SHELL=bash)
-    proc = command.run([sshd, "-f", sshd_config.path, "-D", "-p", str(port)], extra_env=env)
+    proc = command.run(
+        [sshd, "-f", sshd_config.path, "-D", "-p", str(port)], extra_env=env
+    )
 
     while True:
-        if subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-i", sshd_config.key, "localhost", "-p", str(port), "true"]).returncode == 0:
+        if (
+            subprocess.run(
+                [
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                    "-i",
+                    sshd_config.key,
+                    "localhost",
+                    "-p",
+                    str(port),
+                    "true",
+                ]
+            ).returncode
+            == 0
+        ):
             yield Sshd(port, proc, sshd_config.key)
             return
         else:
