@@ -41,7 +41,7 @@ buildPythonPackage rec {
     echo -e "\x1b[32m## run flake8\x1b[0m"
     flake8 .
     echo -e "\x1b[32m## run mypy\x1b[0m"
-    mypy --exclude 'build/' --strict .
+    MYPYPATH=$(pwd):$(pwd)/tests mypy --strict --namespace-packages --explicit-package-bases .
   '';
   meta = with lib; {
     description = "Execute commands remote via ssh and locally in parallel with python";

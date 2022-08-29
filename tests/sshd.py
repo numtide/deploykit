@@ -14,7 +14,7 @@ from command import Command
 
 
 class Sshd:
-    def __init__(self, port: int, proc: subprocess.Popen, key: str) -> None:
+    def __init__(self, port: int, proc: subprocess.Popen[str], key: str) -> None:
         self.port = port
         self.proc = proc
         self.key = key
@@ -80,7 +80,8 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
     env = {}
     if sshd_config.preload_lib is not None:
         bash = shutil.which("bash")
-        env = dict(LD_PRELOAD=sshd_config.preload_lib, LOGIN_SHELL=bash)
+        assert bash is not None
+        env = dict(LD_PRELOAD=str(sshd_config.preload_lib), LOGIN_SHELL=bash)
     proc = command.run([sshd, "-f", sshd_config.path, "-D", "-p", str(port)], extra_env=env)
 
     while True:
