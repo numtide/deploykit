@@ -7,5 +7,6 @@ pkgs.mkShell {
     pkgs.python3.pkgs.flake8
     pkgs.python3.pkgs.black
     pkgs.python3.pkgs.pytest
+    pkgs.python3.pkgs.setuptools
   ];
 }

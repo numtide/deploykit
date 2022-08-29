@@ -58,7 +58,7 @@ def test_run_function() -> None:
 
     hosts = parse_hosts("some_host")
     res = hosts.run_function(some_func)
-    assert res[0].result == True
+    assert res[0].result
 
 
 def test_run_exception() -> None:

@@ -8,7 +8,7 @@ import pwd
 def deploy_group(sshd: Sshd) -> DeployGroup:
     login = pwd.getpwuid(os.getuid()).pw_name
     return parse_hosts(
-        f"{login}@localhost:{sshd.port}", host_key_check=HostKeyCheck.NONE, key=sshd.key
+        f"{login}@127.0.0.1:{sshd.port}", host_key_check=HostKeyCheck.NONE, key=sshd.key
     )
 
 
@@ -39,7 +39,7 @@ def test_run_function(sshd: Sshd) -> None:
 
     g = deploy_group(sshd)
     res = g.run_function(some_func)
-    assert res[0].result == True
+    assert res[0].result
 
 
 def test_run_exception(sshd: Sshd) -> None:

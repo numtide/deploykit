@@ -265,7 +265,10 @@ class DeployHost:
         if vars:
             export_cmd = f"export {' '.join(vars)}; "
             print(export_cmd, end="")
-        print(cmd)
+        if isinstance(cmd, list):
+            print(" ".join(cmd))
+        else:
+            print(cmd)
 
         ssh_opts = ["-A"] if self.forward_agent else []
 
@@ -281,8 +284,6 @@ class DeployHost:
         bash_args = []
         if isinstance(cmd, list):
             bash_cmd += 'exec "$@"'
-            # argv0
-            bash_args.append("bash")
             bash_args += cmd
         else:
             bash_cmd += cmd
@@ -292,7 +293,7 @@ class DeployHost:
             + ssh_opts
             + [
                 "--",
-                f"{sudo}bash -c {quote(bash_cmd)} {' '.join(map(quote, bash_args))}",
+                f"{sudo}bash -c {quote(bash_cmd)} -- {' '.join(map(quote, bash_args))}",
             ]
         )
         return self._run(
