@@ -10,7 +10,7 @@ _FILE = Union[None, int, IO[Any]]
 
 class Command:
     def __init__(self) -> None:
-        self.processes: List[subprocess.Popen] = []
+        self.processes: List[subprocess.Popen[str]] = []
 
     def run(
         self,
@@ -19,8 +19,7 @@ class Command:
         stdin: _FILE = None,
         stdout: _FILE = None,
         stderr: _FILE = None,
-        text: bool = True,
-    ) -> subprocess.Popen:
+    ) -> subprocess.Popen[str]:
         env = os.environ.copy()
         env.update(extra_env)
         # We start a new session here so that we can than more reliably kill all childs as well
@@ -31,7 +30,7 @@ class Command:
             stdout=stdout,
             stderr=stderr,
             stdin=stdin,
-            text=text,
+            text=True,
         )
         self.processes.append(p)
         return p

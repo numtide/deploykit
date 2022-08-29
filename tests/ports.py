@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
 import pytest
+import socket
 
 NEXT_PORT = 10000
-
-import socket
 
 
 def check_port(port: int) -> bool:

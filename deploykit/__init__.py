@@ -113,7 +113,7 @@ class DeployHost:
                 if len(read) == 0:
                     rlist.remove(print_fd)
                 print_buf += read.decode("utf-8")
-                if read == "" or "\n" in print_buf:
+                if read == b"" or "\n" in print_buf:
                     lines = print_buf.rstrip("\n").split("\n")
                     for line in lines:
                         print(f"[{self.command_prefix}] {line}")
@@ -265,7 +265,10 @@ class DeployHost:
         if vars:
             export_cmd = f"export {' '.join(vars)}; "
             print(export_cmd, end="")
-        print(cmd)
+        if isinstance(cmd, list):
+            print(" ".join(cmd))
+        else:
+            print(cmd)
 
         ssh_opts = ["-A"] if self.forward_agent else []
 
@@ -281,8 +284,6 @@ class DeployHost:
         bash_args = []
         if isinstance(cmd, list):
             bash_cmd += 'exec "$@"'
-            # argv0
-            bash_args.append("bash")
             bash_args += cmd
         else:
             bash_cmd += cmd
@@ -292,7 +293,7 @@ class DeployHost:
             + ssh_opts
             + [
                 "--",
-                f"{sudo}bash -c {quote(bash_cmd)} {' '.join(map(quote, bash_args))}",
+                f"{sudo}bash -c {quote(bash_cmd)} -- {' '.join(map(quote, bash_args))}",
             ]
         )
         return self._run(
@@ -394,7 +395,7 @@ class DeployGroup:
         except Exception as e:
             results.append(HostResult(host, e))
 
-    def _reraise_errors(self, results: List[HostResult]) -> None:
+    def _reraise_errors(self, results: List[HostResult[Any]]) -> None:
         for result in results:
             if result.error:
                 raise result.error
@@ -496,7 +497,7 @@ class DeployGroup:
         @func the function to call
         """
         threads = []
-        results: List[HostResult] = [
+        results: List[HostResult[T]] = [
             HostResult(h, Exception(f"No result set for thread {i}"))
             for (i, h) in enumerate(self.hosts)
         ]

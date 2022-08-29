@@ -1,0 +1,47 @@
+{
+  "nodes": {
+    "flake-parts": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1661009076,
+        "narHash": "sha256-phAE40gctVygRq3G3B6LhvD7u2qdQT21xsz8DdRDYFo=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "850d8a76026127ef02f040fb0dcfdb8b749dd9d9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1661186833,
+        "narHash": "sha256-VEw+eoPwp0q/XFlQ6rgM9805WPRBxFPjFNc6RCZ7F/I=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "c83b87fecd1a86d6a1861667664e6f45eb76d763",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flake-parts": "flake-parts",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
