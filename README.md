@@ -50,9 +50,10 @@ A more comprehensive example explaining all the concepts of the API can be found
 
 ## Contributing
 
-Contributions and discussions are welcome. Please make sure to send a WIP PR
-or issue before doing large refactors, so your work doesn't get wasted (in
-case of disagreement).
+Contributions and discussions are welcome. Please make sure to send a WIP PR or
+issue before doing large refactors, so your work doesn't get wasted (in case of
+disagreement). In our [development](DEVELOPMENT.md) documentation we explain how
+to get starte on deploykit.
 
 ## License
 
