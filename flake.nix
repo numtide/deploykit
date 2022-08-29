@@ -11,10 +11,18 @@ python";
   outputs = {
     self,
     flake-parts,
+    nixpkgs,
     ...
   }:
+    let
+      platforms = nixpkgs.lib.intersectLists nixpkgs.lib.systems.flakeExposed nixpkgs.legacyPackages.x86_64-linux.openssh.meta.platforms;
+      substractBrokenPlatforms = nixpkgs.lib.subtractLists [
+        "mipsel-linux"
+        "armv5tel-linux"
+      ];
+    in
     flake-parts.lib.mkFlake {inherit self;} {
-      systems = self.inputs.nixpkgs.legacyPackages.x86_64-linux.openssh.meta.platforms;
+      systems = substractBrokenPlatforms platforms;
       perSystem = { self', pkgs, ...}: {
         packages.deploykit = pkgs.python3.pkgs.callPackage ./nix/default.nix {};
         packages.default = self'.packages.deploykit;
