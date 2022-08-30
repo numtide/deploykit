@@ -211,6 +211,8 @@ class DeployHost:
                     read_std_fd, read_err_fd, stdout_read, stderr_read
                 )
                 ret = p.wait()
+                if not check and ret != 0:
+                    self.err_logger(f"[{self.command_prefix}][Command Failed: {ret}] {cmd}"),
                 if check and ret != 0:
                     raise subprocess.CalledProcessError(
                         ret, cmd=cmd, output=stdout_data, stderr=stderr_data
