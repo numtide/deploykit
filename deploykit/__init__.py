@@ -3,6 +3,7 @@ import os
 import select
 import subprocess
 from contextlib import ExitStack, contextmanager
+from datetime import datetime, timedelta
 from enum import Enum
 from shlex import quote
 from threading import Thread
@@ -23,6 +24,11 @@ from typing import (
     Union,
     TypeVar,
 )
+
+
+# Seconds until a warning is printed when _run produces no output. This is used
+# to warn when ssh connections fail to be established.
+NO_OUTPUT_WARNING = 10
 
 
 @contextmanager
@@ -94,11 +100,13 @@ class DeployHost:
 
     def _prefix_output(
         self,
+        cmd: List[str],
         print_std_fd: Optional[IO[str]],
         print_err_fd: Optional[IO[str]],
         stdout: Optional[IO[str]],
         stderr: Optional[IO[str]],
     ) -> Tuple[str, str]:
+        start = datetime.now()
         rlist = []
         if print_std_fd is not None:
             rlist.append(print_std_fd)
@@ -114,14 +122,18 @@ class DeployHost:
         print_err_buf = ""
         stdout_buf = ""
         stderr_buf = ""
+        had_output = False
+        timeout = NO_OUTPUT_WARNING
 
         while len(rlist) != 0:
-            r, _, _ = select.select(rlist, [], [])
+            r, _, _ = select.select(rlist, [], [], timeout)
 
             def print_from(print_fd: IO[str], print_buf: str, is_err: bool = False) -> str:
                 read = os.read(print_fd.fileno(), 4096)
                 if len(read) == 0:
                     rlist.remove(print_fd)
+                else:
+                    had_output = True
                 print_buf += read.decode("utf-8")
                 if read == b"" or "\n" in print_buf:
                     lines = print_buf.rstrip("\n").split("\n")
@@ -137,6 +149,10 @@ class DeployHost:
                 print_std_buf = print_from(print_std_fd, print_std_buf, is_err=False)
             if print_err_fd in r and print_err_fd is not None:
                 print_err_buf = print_from(print_err_fd, print_err_buf, is_err=True)
+
+            if datetime.now() - start >= timedelta(seconds=NO_OUTPUT_WARNING) and not had_output and timeout != 0:
+                self.err_logger(f"[{self.command_prefix}][Command has not printed within {timeout}s. Is ssh timing out?] {cmd}")
+                timeout = 0
 
             def handle_fd(fd: Optional[IO[Any]]) -> str:
                 if fd and fd in r:
@@ -208,7 +224,7 @@ class DeployHost:
                     assert stderr_write is not None
                     stderr_write.close()
                 stdout_data, stderr_data = self._prefix_output(
-                    read_std_fd, read_err_fd, stdout_read, stderr_read
+                    cmd, read_std_fd, read_err_fd, stdout_read, stderr_read
                 )
                 ret = p.wait()
                 if check and ret != 0:
