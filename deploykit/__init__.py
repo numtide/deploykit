@@ -94,27 +94,31 @@ class DeployHost:
 
     def _prefix_output(
         self,
-        print_fd: Optional[IO[str]],
+        print_std_fd: Optional[IO[str]],
+        print_err_fd: Optional[IO[str]],
         stdout: Optional[IO[str]],
         stderr: Optional[IO[str]],
     ) -> Tuple[str, str]:
         rlist = []
-        if print_fd is not None:
-            rlist.append(print_fd)
+        if print_std_fd is not None:
+            rlist.append(print_std_fd)
+        if print_err_fd is not None:
+            rlist.append(print_err_fd)
         if stdout is not None:
             rlist.append(stdout)
 
         if stderr is not None:
             rlist.append(stderr)
 
-        print_buf = ""
+        print_std_buf = ""
+        print_err_buf = ""
         stdout_buf = ""
         stderr_buf = ""
 
         while len(rlist) != 0:
             r, _, _ = select.select(rlist, [], [])
 
-            if print_fd in r and print_fd is not None:
+            def print_from(print_fd: IO[str], print_buf: str, is_err: bool = False) -> str:
                 read = os.read(print_fd.fileno(), 4096)
                 if len(read) == 0:
                     rlist.remove(print_fd)
@@ -122,8 +126,17 @@ class DeployHost:
                 if read == b"" or "\n" in print_buf:
                     lines = print_buf.rstrip("\n").split("\n")
                     for line in lines:
-                        self.out_logger(f"[{self.command_prefix}] {line}")
+                        if not is_err:
+                            self.out_logger(f"[{self.command_prefix}] {line}")
+                        else:
+                            self.err_logger(f"[{self.command_prefix} ERR] {line}")
                     print_buf = ""
+                return print_buf
+
+            if print_std_fd in r and print_std_fd is not None:
+                print_std_buf = print_from(print_std_fd, print_std_buf, is_err=False)
+            if print_err_fd in r and print_err_fd is not None:
+                print_err_buf = print_from(print_err_fd, print_err_buf, is_err=True)
 
             def handle_fd(fd: Optional[IO[Any]]) -> str:
                 if fd and fd in r:
@@ -149,13 +162,16 @@ class DeployHost:
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         with ExitStack() as stack:
-            read_fd, write_fd = (None, None)
+            read_std_fd, write_std_fd = (None, None)
+            read_err_fd, write_err_fd = (None, None)
+
             if stdout is None or stderr is None:
-                read_fd, write_fd = stack.enter_context(_pipe())
+                read_std_fd, write_std_fd = stack.enter_context(_pipe())
+                read_err_fd, write_err_fd = stack.enter_context(_pipe())
 
             if stdout is None:
                 stdout_read = None
-                stdout_write = write_fd
+                stdout_write = write_std_fd
             elif stdout == subprocess.PIPE:
                 stdout_read, stdout_write = stack.enter_context(_pipe())
             else:
@@ -163,7 +179,7 @@ class DeployHost:
 
             if stderr is None:
                 stderr_read = None
-                stderr_write = write_fd
+                stderr_write = write_err_fd
             elif stderr == subprocess.PIPE:
                 stderr_read, stderr_write = stack.enter_context(_pipe())
             else:
@@ -181,8 +197,10 @@ class DeployHost:
                 env=env,
                 cwd=cwd,
             ) as p:
-                if write_fd is not None:
-                    write_fd.close()
+                if write_std_fd is not None:
+                    write_std_fd.close()
+                if write_err_fd is not None:
+                    write_err_fd.close()
                 if stdout == subprocess.PIPE:
                     assert stdout_write is not None
                     stdout_write.close()
@@ -190,7 +208,7 @@ class DeployHost:
                     assert stderr_write is not None
                     stderr_write.close()
                 stdout_data, stderr_data = self._prefix_output(
-                    read_fd, stdout_read, stderr_read
+                    read_std_fd, read_err_fd, stdout_read, stderr_read
                 )
                 ret = p.wait()
                 if check and ret != 0:
@@ -640,8 +658,8 @@ def parse_hosts(
                 key=key,
                 host_key_check=host_key_check,
                 forward_agent=forward_agent,
-                out_logger = out_logger,
-                err_logger = err_logger,
+                out_logger=out_logger,
+                err_logger=err_logger,
             )
         )
     return DeployGroup(deploy_hosts)
