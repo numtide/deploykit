@@ -57,8 +57,8 @@ class DeployHost:
     def __init__(
         self,
         host: str,
-        user: str = "root",
-        port: int = 22,
+        user: Optional[str] = None,
+        port: Optional[int] = None,
         key: Optional[str] = None,
         forward_agent: bool = False,
         command_prefix: Optional[str] = None,
@@ -270,8 +270,14 @@ class DeployHost:
         else:
             print(cmd)
 
-        ssh_opts = ["-A"] if self.forward_agent else []
+        if self.user is not None:
+            ssh_target = f"{self.user}@{self.host}"
+        else:
+            ssh_target = self.host
 
+        ssh_opts = ["-A"] if self.forward_agent else []
+        if self.port:
+            ssh_opts.extend(["-p", str(self.port)])
         if self.key:
             ssh_opts.extend(["-i", self.key])
 
@@ -289,7 +295,7 @@ class DeployHost:
             bash_cmd += cmd
         # FIXME we assume bash to be present here? Should be documented...
         ssh_cmd = (
-            ["ssh", f"{self.user}@{self.host}", "-p", str(self.port)]
+            ["ssh", ssh_target]
             + ssh_opts
             + [
                 "--",
