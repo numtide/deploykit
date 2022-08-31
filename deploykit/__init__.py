@@ -183,7 +183,9 @@ class DeployHost:
                 if len(read) == 0:
                     rlist.remove(print_fd)
                 print_buf += read.decode("utf-8")
-                if read == b"" or "\n" in print_buf:
+                if (read == b"" and len(print_buf) != 0) or "\n" in print_buf:
+                    # print and empty the print_buf, if the stream is draining,
+                    # but there is still something in the buffer or on newline.
                     lines = print_buf.rstrip("\n").split("\n")
                     for line in lines:
                         if not is_err:
