@@ -187,10 +187,13 @@ class DeployHost:
                     read_fd, stdout_read, stderr_read
                 )
                 ret = p.wait()
-                if check and ret != 0:
-                    raise subprocess.CalledProcessError(
-                        ret, cmd=cmd, output=stdout_data, stderr=stderr_data
-                    )
+                if ret != 0:
+                    if check:
+                        raise subprocess.CalledProcessError(
+                            ret, cmd=cmd, output=stdout_data, stderr=stderr_data
+                        )
+                    else:
+                        print(f"[{self.command_prefix}][Command Failed: {ret}] {cmd}")
                 return subprocess.CompletedProcess(
                     cmd, ret, stdout=stdout_data, stderr=stderr_data
                 )

@@ -44,6 +44,10 @@ def test_run_function(sshd: Sshd) -> None:
 
 def test_run_exception(sshd: Sshd) -> None:
     g = deploy_group(sshd)
+
+    r = g.run("exit 1", check=False)
+    assert r[0].result.returncode == 1
+
     try:
         g.run("exit 1")
     except subprocess.CalledProcessError:
@@ -53,10 +57,11 @@ def test_run_exception(sshd: Sshd) -> None:
 
 
 def test_run_function_exception(sshd: Sshd) -> None:
-    def some_func(h: DeployHost) -> None:
-        h.run_local("exit 1")
+    def some_func(h: DeployHost) -> subprocess.CompletedProcess[str]:
+        return h.run_local("exit 1")
 
     g = deploy_group(sshd)
+
     try:
         g.run_function(some_func)
     except subprocess.CalledProcessError:
