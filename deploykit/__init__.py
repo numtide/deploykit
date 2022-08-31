@@ -2,6 +2,7 @@ import fcntl
 import os
 import select
 import subprocess
+import time
 from contextlib import ExitStack, contextmanager
 from enum import Enum
 from shlex import quote
@@ -42,6 +43,9 @@ def _pipe() -> Iterator[Tuple[IO[str], IO[str]]]:
 
 
 FILE = Union[None, int]
+
+# Seconds until a message is printed when _run produces no output.
+NO_OUTPUT_TIMEOUT = 10
 
 
 class HostKeyCheck(Enum):
@@ -88,6 +92,7 @@ class DeployHost:
 
     def _prefix_output(
         self,
+        displayed_cmd: str,
         print_fd: Optional[IO[str]],
         stdout: Optional[IO[str]],
         stderr: Optional[IO[str]],
@@ -105,8 +110,10 @@ class DeployHost:
         stdout_buf = ""
         stderr_buf = ""
 
+        start = time.time()
+        last_output = time.time()
         while len(rlist) != 0:
-            r, _, _ = select.select(rlist, [], [])
+            r, _, _ = select.select(rlist, [], [], NO_OUTPUT_TIMEOUT)
 
             if print_fd in r and print_fd is not None:
                 read = os.read(print_fd.fileno(), 4096)
@@ -118,6 +125,15 @@ class DeployHost:
                     for line in lines:
                         print(f"[{self.command_prefix}] {line}")
                     print_buf = ""
+                last_output = time.time()
+
+            now = time.time()
+            elapsed = now - start
+            if now - last_output > NO_OUTPUT_TIMEOUT:
+                elapsed_msg = time.strftime("%H:%M:%S", time.gmtime(elapsed))
+                print(
+                    f"[{self.command_prefix}] still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)"
+                )
 
             def handle_fd(fd: Optional[IO[Any]]) -> str:
                 if fd and fd in r:
@@ -135,6 +151,7 @@ class DeployHost:
     def _run(
         self,
         cmd: List[str],
+        displayed_cmd: str,
         shell: bool,
         stdout: FILE = None,
         stderr: FILE = None,
@@ -184,7 +201,7 @@ class DeployHost:
                     assert stderr_write is not None
                     stderr_write.close()
                 stdout_data, stderr_data = self._prefix_output(
-                    read_fd, stdout_read, stderr_read
+                    displayed_cmd, read_fd, stdout_read, stderr_read
                 )
                 ret = p.wait()
                 if ret != 0:
@@ -193,7 +210,7 @@ class DeployHost:
                             ret, cmd=cmd, output=stdout_data, stderr=stderr_data
                         )
                     else:
-                        print(f"[{self.command_prefix}][Command Failed: {ret}] {cmd}")
+                        print(f"[{self.command_prefix}][Command Failed: {ret}] {displayed_cmd}")
                 return subprocess.CompletedProcess(
                     cmd, ret, stdout=stdout_data, stderr=stderr_data
                 )
@@ -223,9 +240,11 @@ class DeployHost:
         if isinstance(cmd, str):
             cmd = [cmd]
             shell = True
-        print(f"[{self.command_prefix}] {' '.join(cmd)}")
+        displayed_cmd = ' '.join(cmd)
+        print(f"[{self.command_prefix}] {displayed_cmd}")
         return self._run(
             cmd,
+            displayed_cmd,
             shell=shell,
             stdout=stdout,
             stderr=stderr,
@@ -263,15 +282,16 @@ class DeployHost:
         for k, v in extra_env.items():
             vars.append(f"{shlex.quote(k)}={shlex.quote(v)}")
 
-        print(f"[{self.command_prefix}] ", end="")
+        displayed_cmd = ""
         export_cmd = ""
         if vars:
             export_cmd = f"export {' '.join(vars)}; "
-            print(export_cmd, end="")
+            displayed_cmd += export_cmd
         if isinstance(cmd, list):
-            print(" ".join(cmd))
+            displayed_cmd += " ".join(cmd)
         else:
-            print(cmd)
+            displayed_cmd += cmd
+        print(f"[{self.command_prefix}] {displayed_cmd}")
 
         if self.user is not None:
             ssh_target = f"{self.user}@{self.host}"
@@ -306,7 +326,7 @@ class DeployHost:
             ]
         )
         return self._run(
-            ssh_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check
+            ssh_cmd, displayed_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check
         )
 
 
