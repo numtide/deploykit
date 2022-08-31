@@ -57,8 +57,8 @@ class DeployHost:
     def __init__(
         self,
         host: str,
-        user: str = "root",
-        port: int = 22,
+        user: Optional[str] = None,
+        port: Optional[int] = None,
         key: Optional[str] = None,
         forward_agent: bool = False,
         command_prefix: Optional[str] = None,
@@ -270,8 +270,14 @@ class DeployHost:
         else:
             print(cmd)
 
-        ssh_opts = ["-A"] if self.forward_agent else []
+        if self.user is not None:
+            ssh_target = f"{self.user}@{self.host}"
+        else:
+            ssh_target = self.host
 
+        ssh_opts = ["-A"] if self.forward_agent else []
+        if self.port:
+            ssh_opts.extend(["-p", str(self.port)])
         if self.key:
             ssh_opts.extend(["-i", self.key])
 
@@ -289,7 +295,7 @@ class DeployHost:
             bash_cmd += cmd
         # FIXME we assume bash to be present here? Should be documented...
         ssh_cmd = (
-            ["ssh", f"{self.user}@{self.host}", "-p", str(self.port)]
+            ["ssh", ssh_target]
             + ssh_opts
             + [
                 "--",
@@ -595,7 +601,7 @@ def parse_hosts(
     key: Optional[str] = None,
     forward_agent: bool = False,
     domain_suffix: str = "",
-    default_user: str = "root",
+    default_user: Optional[str] = None,
 ) -> DeployGroup:
     """
     Parse comma seperated string of hosts
@@ -612,13 +618,13 @@ def parse_hosts(
     for h in hosts.split(","):
         parts = h.split("@")
         if len(parts) > 1:
-            user = parts[0]
+            user: Optional[str] = parts[0]
             hostname = parts[1]
         else:
             user = default_user
             hostname = parts[0]
         maybe_port = hostname.split(":")
-        port = 22
+        port = None
         if len(maybe_port) > 1:
             hostname = maybe_port[0]
             port = int(maybe_port[1])
