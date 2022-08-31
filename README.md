@@ -22,7 +22,8 @@ Here are some important facts about deploykit:
 ## Example
 
 ```python
-from deploykit import parse_hosts, subprocess.
+from deploykit import parse_hosts
+import subprocess
 
 hosts = parse_hosts("server1,server2,server3")
 runs = hosts.run("uptime", stdout=subprocess.PIPE)
