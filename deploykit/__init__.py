@@ -71,10 +71,11 @@ class CommandFormatter(logging.Formatter):
 
 
 def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
-    # If we also use the default logger here (logging.error etc), cmdlog
-    # messages are also posted on the default logger. To avoid this message
-    # duplication, we set up kitlog which does not post cmdlog messages.
-    kitlog = logging.getLogger('deploykit')
+    # If we use the default logger here (logging.error etc) or a logger called
+    # "deploykit", then cmdlog messages are also posted on the default logger.
+    # To avoid this message duplication, we set up a main and command logger
+    # and use a "deploykit" main logger.
+    kitlog = logging.getLogger('deploykit.main')
     kitlog.setLevel(logging.INFO)
 
     ch = logging.StreamHandler()
