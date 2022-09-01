@@ -38,17 +38,36 @@ class CommandFormatter(logging.Formatter):
     """
     def __init__(self) -> None:
         super().__init__("[%(command_prefix)s] %(message)s")
+        self.hostnames: List[str] = []
+        self.color_reset = "\x1b[0m"
+        self.hostname_color_offset = 1  # first host shouldn't get agressive red
 
     def formatMessage(self, record: logging.LogRecord) -> str:
-        colorcode = None
+        colorcode = 0
         if record.levelno == logging.ERROR:
             colorcode = 31  # red
         if record.levelno == logging.WARN:
             colorcode = 33  # yellow
-        if DISABLE_COLOR or colorcode is None:
+        if DISABLE_COLOR:
             return super().formatMessage(record)
-        else:
-            return f"\x1b[{colorcode}m{super().formatMessage(record)}\x1b[0m"
+
+        color = self.color(colorcode)
+        hostname = record.command_prefix  # type: ignore
+        hostname_color = self.color(self.hostname_colorcode(hostname))
+        record.command_prefix = f"{hostname_color}{hostname}{self.color_reset}{color}"  # type: ignore
+        return f"{color}{super().formatMessage(record)}{self.color_reset}"
+
+    def hostname_colorcode(self, hostname: str) -> int:
+        try:
+            index = self.hostnames.index(hostname)
+        except ValueError:
+            self.hostnames += [hostname]
+            index = self.hostnames.index(hostname)
+        return 31 + (index + self.hostname_color_offset) % 7
+
+    @staticmethod
+    def color(color: int) -> str:
+        return f"\x1b[{color}m"
 
 
 def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
@@ -208,7 +227,7 @@ class DeployHost:
             if now - last_output > NO_OUTPUT_TIMEOUT:
                 elapsed_msg = time.strftime("%H:%M:%S", time.gmtime(elapsed))
                 cmdlog.warn(
-                    f"[{self.command_prefix}] still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)",
+                    f"still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)",
                     extra=dict(command_prefix=self.command_prefix)
                 )
 
