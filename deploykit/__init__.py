@@ -8,7 +8,9 @@ from enum import Enum
 from shlex import quote
 from threading import Thread
 from pathlib import Path
+import logging
 import shlex
+import sys
 from typing import (
     IO,
     overload,
@@ -24,6 +26,64 @@ from typing import (
     Union,
     TypeVar,
 )
+
+
+# https://no-color.org
+DISABLE_COLOR = not sys.stderr.isatty() or os.environ.get("NO_COLOR", "") != ""
+
+
+class CommandFormatter(logging.Formatter):
+    """
+    print errors in red and warnings in yellow
+    """
+    def __init__(self) -> None:
+        super().__init__("[%(command_prefix)s] %(message)s")
+
+    def formatMessage(self, record: logging.LogRecord) -> str:
+        colorcode = None
+        if record.levelno == logging.ERROR:
+            colorcode = 31  # red
+        if record.levelno == logging.WARN:
+            colorcode = 33  # yellow
+        if DISABLE_COLOR or colorcode is None:
+            return super().formatMessage(record)
+        else:
+            return f"\x1b[{colorcode}m{super().formatMessage(record)}\x1b[0m"
+
+
+def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
+    # If we also use the default logger here (logging.error etc), cmdlog
+    # messages are also posted on the default logger. To avoid this message
+    # duplication, we set up kitlog which does not post cmdlog messages.
+    kitlog = logging.getLogger('deploykit')
+    kitlog.setLevel(logging.INFO)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    logformat: Optional[logging.Formatter] = logging.Formatter()
+    ch.setFormatter(logformat)
+
+    kitlog.addHandler(ch)
+
+    # use specific logger for command outputs
+    cmdlog = logging.getLogger('deploykit.command')
+    cmdlog.setLevel(logging.INFO)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    logformat = CommandFormatter()
+    ch.setFormatter(logformat)
+
+    cmdlog.addHandler(ch)
+    return (kitlog, cmdlog)
+
+
+# loggers for: general deploykit, command output
+kitlog, cmdlog = setup_loggers()
+
+info = kitlog.info
+warn = kitlog.warn
+error = kitlog.error
 
 
 @contextmanager
@@ -93,20 +153,24 @@ class DeployHost:
     def _prefix_output(
         self,
         displayed_cmd: str,
-        print_fd: Optional[IO[str]],
+        print_std_fd: Optional[IO[str]],
+        print_err_fd: Optional[IO[str]],
         stdout: Optional[IO[str]],
         stderr: Optional[IO[str]],
     ) -> Tuple[str, str]:
         rlist = []
-        if print_fd is not None:
-            rlist.append(print_fd)
+        if print_std_fd is not None:
+            rlist.append(print_std_fd)
+        if print_err_fd is not None:
+            rlist.append(print_err_fd)
         if stdout is not None:
             rlist.append(stdout)
 
         if stderr is not None:
             rlist.append(stderr)
 
-        print_buf = ""
+        print_std_buf = ""
+        print_err_buf = ""
         stdout_buf = ""
         stderr_buf = ""
 
@@ -115,24 +179,37 @@ class DeployHost:
         while len(rlist) != 0:
             r, _, _ = select.select(rlist, [], [], NO_OUTPUT_TIMEOUT)
 
-            if print_fd in r and print_fd is not None:
+            def print_from(print_fd: IO[str], print_buf: str, is_err: bool = False) -> Tuple[float, str]:
                 read = os.read(print_fd.fileno(), 4096)
                 if len(read) == 0:
                     rlist.remove(print_fd)
                 print_buf += read.decode("utf-8")
-                if read == b"" or "\n" in print_buf:
+                if (read == b"" and len(print_buf) != 0) or "\n" in print_buf:
+                    # print and empty the print_buf, if the stream is draining,
+                    # but there is still something in the buffer or on newline.
                     lines = print_buf.rstrip("\n").split("\n")
                     for line in lines:
-                        print(f"[{self.command_prefix}] {line}")
+                        if not is_err:
+                            cmdlog.info(line, extra=dict(command_prefix=self.command_prefix))
+                            pass
+                        else:
+                            cmdlog.error(line, extra=dict(command_prefix=self.command_prefix))
                     print_buf = ""
                 last_output = time.time()
+                return (last_output, print_buf)
+
+            if print_std_fd in r and print_std_fd is not None:
+                (last_output, print_std_buf) = print_from(print_std_fd, print_std_buf, is_err=False)
+            if print_err_fd in r and print_err_fd is not None:
+                (last_output, print_err_buf) = print_from(print_err_fd, print_err_buf, is_err=True)
 
             now = time.time()
             elapsed = now - start
             if now - last_output > NO_OUTPUT_TIMEOUT:
                 elapsed_msg = time.strftime("%H:%M:%S", time.gmtime(elapsed))
-                print(
-                    f"[{self.command_prefix}] still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)"
+                cmdlog.warn(
+                    f"[{self.command_prefix}] still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)",
+                    extra=dict(command_prefix=self.command_prefix)
                 )
 
             def handle_fd(fd: Optional[IO[Any]]) -> str:
@@ -160,13 +237,16 @@ class DeployHost:
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         with ExitStack() as stack:
-            read_fd, write_fd = (None, None)
+            read_std_fd, write_std_fd = (None, None)
+            read_err_fd, write_err_fd = (None, None)
+
             if stdout is None or stderr is None:
-                read_fd, write_fd = stack.enter_context(_pipe())
+                read_std_fd, write_std_fd = stack.enter_context(_pipe())
+                read_err_fd, write_err_fd = stack.enter_context(_pipe())
 
             if stdout is None:
                 stdout_read = None
-                stdout_write = write_fd
+                stdout_write = write_std_fd
             elif stdout == subprocess.PIPE:
                 stdout_read, stdout_write = stack.enter_context(_pipe())
             else:
@@ -174,7 +254,7 @@ class DeployHost:
 
             if stderr is None:
                 stderr_read = None
-                stderr_write = write_fd
+                stderr_write = write_err_fd
             elif stderr == subprocess.PIPE:
                 stderr_read, stderr_write = stack.enter_context(_pipe())
             else:
@@ -192,8 +272,10 @@ class DeployHost:
                 env=env,
                 cwd=cwd,
             ) as p:
-                if write_fd is not None:
-                    write_fd.close()
+                if write_std_fd is not None:
+                    write_std_fd.close()
+                if write_err_fd is not None:
+                    write_err_fd.close()
                 if stdout == subprocess.PIPE:
                     assert stdout_write is not None
                     stdout_write.close()
@@ -201,7 +283,7 @@ class DeployHost:
                     assert stderr_write is not None
                     stderr_write.close()
                 stdout_data, stderr_data = self._prefix_output(
-                    displayed_cmd, read_fd, stdout_read, stderr_read
+                    displayed_cmd, read_std_fd, read_err_fd, stdout_read, stderr_read
                 )
                 ret = p.wait()
                 if ret != 0:
@@ -210,7 +292,7 @@ class DeployHost:
                             ret, cmd=cmd, output=stdout_data, stderr=stderr_data
                         )
                     else:
-                        print(f"[{self.command_prefix}][Command Failed: {ret}] {displayed_cmd}")
+                        cmdlog.warn(f"[Command failed: {ret}] {displayed_cmd}", extra=dict(command_prefix=self.command_prefix))
                 return subprocess.CompletedProcess(
                     cmd, ret, stdout=stdout_data, stderr=stderr_data
                 )
@@ -241,7 +323,7 @@ class DeployHost:
             cmd = [cmd]
             shell = True
         displayed_cmd = ' '.join(cmd)
-        print(f"[{self.command_prefix}] {displayed_cmd}")
+        cmdlog.info(f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix))
         return self._run(
             cmd,
             displayed_cmd,
@@ -291,7 +373,7 @@ class DeployHost:
             displayed_cmd += " ".join(cmd)
         else:
             displayed_cmd += cmd
-        print(f"[{self.command_prefix}] {displayed_cmd}")
+        cmdlog.info(f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix))
 
         if self.user is not None:
             ssh_target = f"{self.user}@{self.host}"
@@ -600,9 +682,9 @@ def run(
            captured.
     """
     if isinstance(cmd, list):
-        print(" ".join(cmd))
+        info("$ " + " ".join(cmd))
     else:
-        print(cmd)
+        info(f"$ {cmd}")
     env = os.environ.copy()
     env.update(extra_env)
 
