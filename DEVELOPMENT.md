@@ -42,4 +42,4 @@ $ flake8 .
 ## Logging
 
 We use python3s `logging` library. 
-DeployHost-related logging starting with `[hostname]` is handled by a logger called `command`, other logging is handled by the `deploykit` logger.
+DeployHost-related logging starting with `[hostname]` is handled by a logger called `deploykit.command`, other logging is handled by the `deploykit` logger.

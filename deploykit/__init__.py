@@ -28,7 +28,8 @@ from typing import (
 )
 
 
-HAS_TTY = sys.stderr.isatty()
+# https://no-color.org
+DISABLE_COLOR = not sys.stderr.isatty() or os.environ.get("NO_COLOR", "") != ""
 
 
 class CommandFormatter(logging.Formatter):
@@ -44,7 +45,7 @@ class CommandFormatter(logging.Formatter):
             colorcode = 31  # red
         if record.levelno == logging.WARN:
             colorcode = 33  # yellow
-        if not HAS_TTY or colorcode is None:
+        if DISABLE_COLOR or colorcode is None:
             return super().formatMessage(record)
         else:
             return f"\x1b[{colorcode}m{super().formatMessage(record)}\x1b[0m"
@@ -65,7 +66,7 @@ def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
     kitlog.addHandler(ch)
 
     # use specific logger for command outputs
-    cmdlog = logging.getLogger('command')
+    cmdlog = logging.getLogger('deploykit.command')
     cmdlog.setLevel(logging.INFO)
 
     ch = logging.StreamHandler()
