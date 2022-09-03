@@ -125,7 +125,7 @@ def _pipe() -> Iterator[Tuple[IO[str], IO[str]]]:
 FILE = Union[None, int]
 
 # Seconds until a message is printed when _run produces no output.
-NO_OUTPUT_TIMEOUT = 10
+NO_OUTPUT_TIMEOUT = 20
 
 
 class HostKeyCheck(Enum):
