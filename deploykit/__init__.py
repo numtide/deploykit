@@ -32,14 +32,20 @@ from typing import (
 DISABLE_COLOR = not sys.stderr.isatty() or os.environ.get("NO_COLOR", "") != ""
 
 
+def ansi_color(color: int) -> str:
+    return f"\x1b[{color}m"
+
+
 class CommandFormatter(logging.Formatter):
     """
     print errors in red and warnings in yellow
     """
+
     def __init__(self) -> None:
-        super().__init__("[%(command_prefix)s] %(message)s")
+        super().__init__(
+            "%(prefix_color)s[%(command_prefix)s]%(color_reset)s %(color)s%(message)s%(color_reset)s"
+        )
         self.hostnames: List[str] = []
-        self.color_reset = "\x1b[0m"
         self.hostname_color_offset = 1  # first host shouldn't get agressive red
 
     def formatMessage(self, record: logging.LogRecord) -> str:
@@ -48,14 +54,19 @@ class CommandFormatter(logging.Formatter):
             colorcode = 31  # red
         if record.levelno == logging.WARN:
             colorcode = 33  # yellow
-        if DISABLE_COLOR:
-            return super().formatMessage(record)
 
-        color = self.color(colorcode)
-        hostname = record.command_prefix  # type: ignore
-        hostname_color = self.color(self.hostname_colorcode(hostname))
-        record.command_prefix = f"{hostname_color}{hostname}{self.color_reset}{color}"  # type: ignore
-        return f"{color}{super().formatMessage(record)}{self.color_reset}"
+        color, prefix_color, color_reset = "", "", ""
+        if not DISABLE_COLOR:
+            command_prefix = getattr(record, "command_prefix", "")
+            color = ansi_color(colorcode)
+            prefix_color = ansi_color(self.hostname_colorcode(command_prefix))
+            color_reset = "\x1b[0m"
+
+        setattr(record, "color", color)
+        setattr(record, "prefix_color", prefix_color)
+        setattr(record, "color_reset", color_reset)
+
+        return super().formatMessage(record)
 
     def hostname_colorcode(self, hostname: str) -> int:
         try:
@@ -65,17 +76,13 @@ class CommandFormatter(logging.Formatter):
             index = self.hostnames.index(hostname)
         return 31 + (index + self.hostname_color_offset) % 7
 
-    @staticmethod
-    def color(color: int) -> str:
-        return f"\x1b[{color}m"
-
 
 def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
     # If we use the default logger here (logging.error etc) or a logger called
     # "deploykit", then cmdlog messages are also posted on the default logger.
     # To avoid this message duplication, we set up a main and command logger
     # and use a "deploykit" main logger.
-    kitlog = logging.getLogger('deploykit.main')
+    kitlog = logging.getLogger("deploykit.main")
     kitlog.setLevel(logging.INFO)
 
     ch = logging.StreamHandler()
@@ -86,7 +93,7 @@ def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
     kitlog.addHandler(ch)
 
     # use specific logger for command outputs
-    cmdlog = logging.getLogger('deploykit.command')
+    cmdlog = logging.getLogger("deploykit.command")
     cmdlog.setLevel(logging.INFO)
 
     ch = logging.StreamHandler()
@@ -199,7 +206,9 @@ class DeployHost:
         while len(rlist) != 0:
             r, _, _ = select.select(rlist, [], [], NO_OUTPUT_TIMEOUT)
 
-            def print_from(print_fd: IO[str], print_buf: str, is_err: bool = False) -> Tuple[float, str]:
+            def print_from(
+                print_fd: IO[str], print_buf: str, is_err: bool = False
+            ) -> Tuple[float, str]:
                 read = os.read(print_fd.fileno(), 4096)
                 if len(read) == 0:
                     rlist.remove(print_fd)
@@ -210,18 +219,26 @@ class DeployHost:
                     lines = print_buf.rstrip("\n").split("\n")
                     for line in lines:
                         if not is_err:
-                            cmdlog.info(line, extra=dict(command_prefix=self.command_prefix))
+                            cmdlog.info(
+                                line, extra=dict(command_prefix=self.command_prefix)
+                            )
                             pass
                         else:
-                            cmdlog.error(line, extra=dict(command_prefix=self.command_prefix))
+                            cmdlog.error(
+                                line, extra=dict(command_prefix=self.command_prefix)
+                            )
                     print_buf = ""
                 last_output = time.time()
                 return (last_output, print_buf)
 
             if print_std_fd in r and print_std_fd is not None:
-                (last_output, print_std_buf) = print_from(print_std_fd, print_std_buf, is_err=False)
+                (last_output, print_std_buf) = print_from(
+                    print_std_fd, print_std_buf, is_err=False
+                )
             if print_err_fd in r and print_err_fd is not None:
-                (last_output, print_err_buf) = print_from(print_err_fd, print_err_buf, is_err=True)
+                (last_output, print_err_buf) = print_from(
+                    print_err_fd, print_err_buf, is_err=True
+                )
 
             now = time.time()
             elapsed = now - start
@@ -229,7 +246,7 @@ class DeployHost:
                 elapsed_msg = time.strftime("%H:%M:%S", time.gmtime(elapsed))
                 cmdlog.warn(
                     f"still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)",
-                    extra=dict(command_prefix=self.command_prefix)
+                    extra=dict(command_prefix=self.command_prefix),
                 )
 
             def handle_fd(fd: Optional[IO[Any]]) -> str:
@@ -312,7 +329,10 @@ class DeployHost:
                             ret, cmd=cmd, output=stdout_data, stderr=stderr_data
                         )
                     else:
-                        cmdlog.warn(f"[Command failed: {ret}] {displayed_cmd}", extra=dict(command_prefix=self.command_prefix))
+                        cmdlog.warn(
+                            f"[Command failed: {ret}] {displayed_cmd}",
+                            extra=dict(command_prefix=self.command_prefix),
+                        )
                 return subprocess.CompletedProcess(
                     cmd, ret, stdout=stdout_data, stderr=stderr_data
                 )
@@ -342,8 +362,10 @@ class DeployHost:
         if isinstance(cmd, str):
             cmd = [cmd]
             shell = True
-        displayed_cmd = ' '.join(cmd)
-        cmdlog.info(f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix))
+        displayed_cmd = " ".join(cmd)
+        cmdlog.info(
+            f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix)
+        )
         return self._run(
             cmd,
             displayed_cmd,
@@ -393,7 +415,9 @@ class DeployHost:
             displayed_cmd += " ".join(cmd)
         else:
             displayed_cmd += cmd
-        cmdlog.info(f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix))
+        cmdlog.info(
+            f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix)
+        )
 
         if self.user is not None:
             ssh_target = f"{self.user}@{self.host}"
@@ -428,7 +452,13 @@ class DeployHost:
             ]
         )
         return self._run(
-            ssh_cmd, displayed_cmd, shell=False, stdout=stdout, stderr=stderr, cwd=cwd, check=check
+            ssh_cmd,
+            displayed_cmd,
+            shell=False,
+            stdout=stdout,
+            stderr=stderr,
+            cwd=cwd,
+            check=check,
         )
 
 
