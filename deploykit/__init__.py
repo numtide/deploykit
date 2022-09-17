@@ -87,8 +87,7 @@ def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
 
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
-    logformat: Optional[logging.Formatter] = logging.Formatter()
-    ch.setFormatter(logformat)
+    ch.setFormatter(logging.Formatter())
 
     kitlog.addHandler(ch)
 
@@ -98,8 +97,7 @@ def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
 
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
-    logformat = CommandFormatter()
-    ch.setFormatter(logformat)
+    ch.setFormatter(CommandFormatter())
 
     cmdlog.addHandler(ch)
     return (kitlog, cmdlog)
