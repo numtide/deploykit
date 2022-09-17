@@ -501,6 +501,7 @@ def _worker(
     try:
         results[idx] = HostResult(host, func(host))
     except Exception as e:
+        kitlog.exception(e)
         results[idx] = HostResult(host, e)
 
 
@@ -530,6 +531,7 @@ class DeployGroup:
             )
             results.append(HostResult(host, proc))
         except Exception as e:
+            kitlog.exception(e)
             results.append(HostResult(host, e))
 
     def _run_remote(
@@ -554,12 +556,23 @@ class DeployGroup:
             )
             results.append(HostResult(host, proc))
         except Exception as e:
+            kitlog.exception(e)
             results.append(HostResult(host, e))
 
     def _reraise_errors(self, results: List[HostResult[Any]]) -> None:
+        errors = 0
         for result in results:
-            if result.error:
-                raise result.error
+            e = result.error
+            if e:
+                cmdlog.error(
+                    f"failed with: {e}",
+                    extra=dict(command_prefix=result.host.command_prefix),
+                )
+                errors += 1
+        if errors > 0:
+            raise Exception(
+                f"{errors} hosts failed with an error. Check the logs above"
+            )
 
     def _run(
         self,
