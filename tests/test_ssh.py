@@ -50,7 +50,7 @@ def test_run_exception(sshd: Sshd) -> None:
 
     try:
         g.run("exit 1")
-    except subprocess.CalledProcessError:
+    except Exception:
         pass
     else:
         assert False, "should have raised Exception"
@@ -64,7 +64,7 @@ def test_run_function_exception(sshd: Sshd) -> None:
 
     try:
         g.run_function(some_func)
-    except subprocess.CalledProcessError:
+    except Exception:
         pass
     else:
         assert False, "should have raised Exception"

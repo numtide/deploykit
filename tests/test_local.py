@@ -13,7 +13,7 @@ def test_run_failure() -> None:
 
     try:
         p = run("exit 1")
-    except subprocess.CalledProcessError:
+    except Exception:
         pass
     else:
         assert False, "Command should have raised an error"
@@ -65,7 +65,7 @@ def test_run_exception() -> None:
     hosts = parse_hosts("some_host")
     try:
         hosts.run_local("exit 1")
-    except subprocess.CalledProcessError:
+    except Exception:
         pass
     else:
         assert False, "should have raised Exception"
@@ -78,7 +78,7 @@ def test_run_function_exception() -> None:
     hosts = parse_hosts("some_host")
     try:
         hosts.run_function(some_func)
-    except subprocess.CalledProcessError:
+    except Exception:
         pass
     else:
         assert False, "should have raised Exception"
