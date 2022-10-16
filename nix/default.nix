@@ -10,6 +10,7 @@
 , openssh
 , bash
 , lib
+, stdenv
 }:
 
 buildPythonPackage rec {
@@ -31,6 +32,8 @@ buildPythonPackage rec {
   ];
 
   #preCheck = ''echo "sleep ...."; sleep 99999'';
+
+  disabledTests = lib.optionals stdenv.isDarwin [ "test_ssh" ];
 
   # don't swallow stdout/stderr
   pytestFlagsArray = [ "-s" ];
