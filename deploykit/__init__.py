@@ -107,7 +107,7 @@ def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
 kitlog, cmdlog = setup_loggers()
 
 info = kitlog.info
-warn = kitlog.warn
+warn = kitlog.warning
 error = kitlog.error
 
 
@@ -153,6 +153,7 @@ class DeployHost:
         command_prefix: Optional[str] = None,
         host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
         meta: Dict[str, Any] = {},
+        verbose_ssh: bool = False
     ) -> None:
         """
         Creates a DeployHost
@@ -161,6 +162,7 @@ class DeployHost:
         @forward_agent: wheter to forward ssh agent
         @command_prefix: string to prefix each line of the command output with, defaults to host
         @host_key_check: wether to check ssh host keys
+        @verbose_ssh: Enables verbose logging on ssh connections
         @meta: meta attributes associated with the host. Those can be accessed in custom functions passed to `run_function`
         """
         self.host = host
@@ -174,6 +176,7 @@ class DeployHost:
         self.forward_agent = forward_agent
         self.host_key_check = host_key_check
         self.meta = meta
+        self.verbose_ssh = verbose_ssh
 
     def _prefix_output(
         self,
@@ -384,6 +387,7 @@ class DeployHost:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        verbose_ssh: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         """
         Command to run on the host via ssh
@@ -394,6 +398,7 @@ class DeployHost:
         @become_root if the ssh_user is not root than sudo is prepended
         @extra_env environment variables to override whe running the command
         @cwd current working directory to run the process in
+        @verbose_ssh: Enables verbose logging on ssh connections
 
         @return subprocess.CompletedProcess result of the ssh command
         """
@@ -432,6 +437,8 @@ class DeployHost:
             ssh_opts.extend(["-o", "StrictHostKeyChecking=no"])
         if self.host_key_check == HostKeyCheck.NONE:
             ssh_opts.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        if verbose_ssh or self.verbose_ssh:
+            ssh_opts.extend(["-v"])
 
         bash_cmd = export_cmd
         bash_args = []
@@ -517,6 +524,7 @@ class DeployGroup:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        verbose_ssh: bool = False
     ) -> None:
         try:
             proc = host.run_local(
@@ -542,6 +550,7 @@ class DeployGroup:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        verbose_ssh: bool = False
     ) -> None:
         try:
             proc = host.run(
@@ -551,6 +560,7 @@ class DeployGroup:
                 extra_env=extra_env,
                 cwd=cwd,
                 check=check,
+                verbose_ssh=verbose_ssh
             )
             results.append(HostResult(host, proc))
         except Exception as e:
@@ -581,6 +591,7 @@ class DeployGroup:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        verbose_ssh: bool = False,
     ) -> DeployResults:
         results: DeployResults = []
         threads = []
@@ -597,6 +608,7 @@ class DeployGroup:
                     extra_env=extra_env,
                     cwd=cwd,
                     check=check,
+                    verbose_ssh=verbose_ssh,
                 ),
             )
             thread.start()
@@ -618,17 +630,19 @@ class DeployGroup:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        verbose_ssh: bool = False,
     ) -> DeployResults:
         """
         Command to run on the remote host via ssh
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @cwd current working directory to run the process in
+        @verbose_ssh: Enables verbose logging on ssh connections
 
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
         return self._run(
-            cmd, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd, check=check
+            cmd, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd, check=check, verbose_ssh=verbose_ssh
         )
 
     def run_local(

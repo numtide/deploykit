@@ -7,7 +7,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Iterator, Optional
 from sys import platform
-from distutils.ccompiler import new_compiler
 
 from ports import Ports
 from command import Command
@@ -60,14 +59,9 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
 
         lib_path = None
         if platform == "linux":
-            # FIXME test this on other systems
-            compiler = new_compiler()
             # This enforces a login shell by overriding the login shell of `getpwnam(3)`
-            src = [str(test_root / "getpwnam-preload.c")]
-            objects = compiler.compile(src, output_dir=_dir)
-            lib = "getpwnam-preload"
-            compiler.link_shared_lib(objects, lib, output_dir=_dir)
-            lib_path = str(dir / compiler.library_filename(lib, lib_type="shared"))
+            lib_path = str(dir / "libgetpwnam-preload.so")
+            subprocess.run([os.environ.get("CC", "cc"), "-shared", "-o", lib_path, str(test_root / "getpwnam-preload.c")], check=True)
 
         yield SshdConfig(str(sshd_config), str(host_key), lib_path)
 
