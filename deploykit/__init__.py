@@ -107,7 +107,7 @@ def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
 kitlog, cmdlog = setup_loggers()
 
 info = kitlog.info
-warn = kitlog.warn
+warn = kitlog.warning
 error = kitlog.error
 
 
