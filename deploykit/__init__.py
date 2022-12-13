@@ -329,7 +329,7 @@ class DeployHost:
                             ret, cmd=cmd, output=stdout_data, stderr=stderr_data
                         )
                     else:
-                        cmdlog.warn(
+                        cmdlog.warning(
                             f"[Command failed: {ret}] {displayed_cmd}",
                             extra=dict(command_prefix=self.command_prefix),
                         )
