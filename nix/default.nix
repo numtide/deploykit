@@ -3,7 +3,7 @@
 , mypy
 , black
 , setuptools
-, flake8
+, ruff
 , pytest
 , glibcLocales
 , pytestCheckHook
@@ -24,11 +24,11 @@ buildPythonPackage rec {
   checkInputs = [
     mypy
     black
-    flake8
     glibcLocales
     pytestCheckHook
     openssh
     bash
+    ruff
   ];
 
   #preCheck = ''echo "sleep ...."; sleep 99999'';
@@ -41,8 +41,8 @@ buildPythonPackage rec {
   postCheck = ''
     echo -e "\x1b[32m## run black\x1b[0m"
     LC_ALL=en_US.utf-8 black --check .
-    echo -e "\x1b[32m## run flake8\x1b[0m"
-    flake8 .
+    echo -e "\x1b[32m## run ruff\x1b[0m"
+    ruff .
     echo -e "\x1b[32m## run mypy\x1b[0m"
     MYPYPATH=$(pwd):$(pwd)/tests mypy --strict --namespace-packages --explicit-package-bases .
   '';

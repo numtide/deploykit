@@ -1,5 +1,6 @@
-from deploykit import parse_hosts, run, DeployHost
 import subprocess
+
+from deploykit import DeployHost, parse_hosts, run
 
 
 def test_run() -> None:
