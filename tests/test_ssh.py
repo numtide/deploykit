@@ -1,8 +1,10 @@
-import subprocess
-from deploykit import DeployGroup, parse_hosts, HostKeyCheck, DeployHost
-from sshd import Sshd
 import os
 import pwd
+import subprocess
+
+from sshd import Sshd
+
+from deploykit import DeployGroup, DeployHost, HostKeyCheck, parse_hosts
 
 
 def deploy_group(sshd: Sshd) -> DeployGroup:

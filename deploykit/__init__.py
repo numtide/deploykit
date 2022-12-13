@@ -1,32 +1,31 @@
 import fcntl
+import logging
 import os
 import select
+import shlex
 import subprocess
+import sys
 import time
 from contextlib import ExitStack, contextmanager
 from enum import Enum
+from pathlib import Path
 from shlex import quote
 from threading import Thread
-from pathlib import Path
-import logging
-import shlex
-import sys
 from typing import (
     IO,
-    overload,
-    Literal,
-    Generic,
     Any,
     Callable,
     Dict,
+    Generic,
     Iterator,
     List,
+    Literal,
     Optional,
     Tuple,
-    Union,
     TypeVar,
+    Union,
+    overload,
 )
-
 
 # https://no-color.org
 DISABLE_COLOR = not sys.stderr.isatty() or os.environ.get("NO_COLOR", "") != ""
@@ -153,7 +152,7 @@ class DeployHost:
         command_prefix: Optional[str] = None,
         host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
         meta: Dict[str, Any] = {},
-        verbose_ssh: bool = False
+        verbose_ssh: bool = False,
     ) -> None:
         """
         Creates a DeployHost
@@ -524,7 +523,7 @@ class DeployGroup:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
-        verbose_ssh: bool = False
+        verbose_ssh: bool = False,
     ) -> None:
         try:
             proc = host.run_local(
@@ -550,7 +549,7 @@ class DeployGroup:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
-        verbose_ssh: bool = False
+        verbose_ssh: bool = False,
     ) -> None:
         try:
             proc = host.run(
@@ -560,7 +559,7 @@ class DeployGroup:
                 extra_env=extra_env,
                 cwd=cwd,
                 check=check,
-                verbose_ssh=verbose_ssh
+                verbose_ssh=verbose_ssh,
             )
             results.append(HostResult(host, proc))
         except Exception as e:
@@ -642,7 +641,13 @@ class DeployGroup:
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
         return self._run(
-            cmd, stdout=stdout, stderr=stderr, extra_env=extra_env, cwd=cwd, check=check, verbose_ssh=verbose_ssh
+            cmd,
+            stdout=stdout,
+            stderr=stderr,
+            extra_env=extra_env,
+            cwd=cwd,
+            check=check,
+            verbose_ssh=verbose_ssh,
         )
 
     def run_local(

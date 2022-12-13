@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import subprocess
-from deploykit import run, parse_hosts, DeployHost
 import argparse
+import subprocess
+
+from deploykit import DeployHost, parse_hosts, run
 
 
 def deploy(host: DeployHost) -> None:

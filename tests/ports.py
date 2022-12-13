@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import pytest
 import socket
+
+import pytest
 
 NEXT_PORT = 10000
 

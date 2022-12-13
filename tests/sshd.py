@@ -1,15 +1,15 @@
-import pytest
+import os
 import shutil
 import subprocess
 import time
-import os
 from pathlib import Path
+from sys import platform
 from tempfile import TemporaryDirectory
 from typing import Iterator, Optional
-from sys import platform
 
-from ports import Ports
+import pytest
 from command import Command
+from ports import Ports
 
 
 class Sshd:
@@ -61,7 +61,16 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
         if platform == "linux":
             # This enforces a login shell by overriding the login shell of `getpwnam(3)`
             lib_path = str(dir / "libgetpwnam-preload.so")
-            subprocess.run([os.environ.get("CC", "cc"), "-shared", "-o", lib_path, str(test_root / "getpwnam-preload.c")], check=True)
+            subprocess.run(
+                [
+                    os.environ.get("CC", "cc"),
+                    "-shared",
+                    "-o",
+                    lib_path,
+                    str(test_root / "getpwnam-preload.c"),
+                ],
+                check=True,
+            )
 
         yield SshdConfig(str(sshd_config), str(host_key), lib_path)
 
