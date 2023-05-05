@@ -61,6 +61,11 @@ def main() -> None:
     runs = g.run_local("hostname", stdout=subprocess.PIPE)
     print(runs[0].result.stdout)
 
+    # To select a subset of the hosts, you can use the filter function
+    g2 = g.filter(lambda h: h.host == "host2")
+    # This should then only output "host2"
+    g2.run("hostname")
+
 
 if __name__ == "__main__":
     main()
