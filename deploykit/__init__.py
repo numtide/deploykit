@@ -708,6 +708,10 @@ class DeployGroup:
             self._reraise_errors(results)
         return results
 
+    def filter(self, pred: Callable[[DeployHost], bool]) -> "DeployGroup":
+        """Return a new DeployGroup with the results filtered by the predicate"""
+        return DeployGroup(list(filter(pred, self.hosts)))
+
 
 @overload
 def run(
