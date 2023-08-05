@@ -44,6 +44,16 @@ def test_run_function(sshd: Sshd) -> None:
     assert res[0].result
 
 
+def test_timeout() -> None:
+    hosts = parse_hosts("some_host")
+    try:
+        hosts.run_local("sleep 10", timeout=0.01)
+    except Exception:
+        pass
+    else:
+        assert False, "should have raised TimeoutExpired"
+
+
 def test_run_exception(sshd: Sshd) -> None:
     g = deploy_group(sshd)
 
