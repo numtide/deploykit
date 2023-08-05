@@ -10,24 +10,21 @@ python";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, flake-parts, nixpkgs, treefmt-nix, ... }:
-    let
-      platforms = nixpkgs.lib.intersectLists nixpkgs.lib.systems.flakeExposed nixpkgs.legacyPackages.x86_64-linux.openssh.meta.platforms;
-      substractBrokenPlatforms = nixpkgs.lib.subtractLists [
-        "mipsel-linux"
-        "armv5tel-linux"
-      ];
-    in
-    flake-parts.lib.mkFlake { inherit self; } {
+  outputs = inputs @ { flake-parts, nixpkgs, ... }:
+    (flake-parts.lib.evalFlakeModule { inherit inputs; } ({ lib, pkgs, ... }: {
       imports = [
-        treefmt-nix.flakeModule
+        inputs.treefmt-nix.flakeModule
       ];
-      systems = substractBrokenPlatforms platforms;
+      systems =
+        let
+          opensshPlatforms = lib.intersectLists lib.systems.flakeExposed nixpkgs.legacyPackages.x86_64-linux.openssh.meta.platforms;
+        in
+        nixpkgs.lib.subtractLists [ "mipsel-linux" "armv5tel-linux" ] opensshPlatforms;
       perSystem = { self', pkgs, ... }: {
         packages.deploykit = pkgs.python3.pkgs.callPackage ./nix/default.nix { };
         packages.default = self'.packages.deploykit;
         devShells.default = pkgs.callPackage ./nix/shell.nix { };
         treefmt = import ./treefmt.nix;
       };
-    };
+    })).config.flake;
 }
