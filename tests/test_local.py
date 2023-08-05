@@ -52,6 +52,16 @@ def test_run_local() -> None:
     hosts.run_local("echo hello")
 
 
+def test_timeout() -> None:
+    hosts = parse_hosts("some_host")
+    try:
+        hosts.run_local("sleep 10", timeout=0.01)
+    except Exception:
+        pass
+    else:
+        assert False, "should have raised TimeoutExpired"
+
+
 def test_run_function() -> None:
     def some_func(h: DeployHost) -> bool:
         p = h.run_local("echo hello", stdout=subprocess.PIPE)

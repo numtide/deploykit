@@ -1,5 +1,6 @@
 import fcntl
 import logging
+import math
 import os
 import select
 import shlex
@@ -184,6 +185,7 @@ class DeployHost:
         print_err_fd: Optional[IO[str]],
         stdout: Optional[IO[str]],
         stderr: Optional[IO[str]],
+        timeout: float = math.inf,
     ) -> Tuple[str, str]:
         rlist = []
         if print_std_fd is not None:
@@ -204,7 +206,7 @@ class DeployHost:
         start = time.time()
         last_output = time.time()
         while len(rlist) != 0:
-            r, _, _ = select.select(rlist, [], [], NO_OUTPUT_TIMEOUT)
+            r, _, _ = select.select(rlist, [], [], min(timeout, NO_OUTPUT_TIMEOUT))
 
             def print_from(
                 print_fd: IO[str], print_buf: str, is_err: bool = False
@@ -260,6 +262,9 @@ class DeployHost:
 
             stdout_buf += handle_fd(stdout)
             stderr_buf += handle_fd(stderr)
+
+            if now - last_output >= timeout:
+                break
         return stdout_buf, stderr_buf
 
     def _run(
@@ -272,6 +277,7 @@ class DeployHost:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
         with ExitStack() as stack:
             read_std_fd, write_std_fd = (None, None)
@@ -319,10 +325,21 @@ class DeployHost:
                 if stderr == subprocess.PIPE:
                     assert stderr_write is not None
                     stderr_write.close()
+
+                start = time.time()
                 stdout_data, stderr_data = self._prefix_output(
-                    displayed_cmd, read_std_fd, read_err_fd, stdout_read, stderr_read
+                    displayed_cmd,
+                    read_std_fd,
+                    read_err_fd,
+                    stdout_read,
+                    stderr_read,
+                    timeout,
                 )
-                ret = p.wait()
+                try:
+                    ret = p.wait(timeout=max(0, timeout - (time.time() - start)))
+                except subprocess.TimeoutExpired:
+                    p.kill()
+                    raise
                 if ret != 0:
                     if check:
                         raise subprocess.CalledProcessError(
@@ -346,6 +363,7 @@ class DeployHost:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
         """
         Command to run locally for the host
@@ -355,6 +373,7 @@ class DeployHost:
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @extra_env environment variables to override whe running the command
         @cwd current working directory to run the process in
+        @timeout: Timeout in seconds for the command to complete
 
         @return subprocess.CompletedProcess result of the command
         """
@@ -375,6 +394,7 @@ class DeployHost:
             extra_env=extra_env,
             cwd=cwd,
             check=check,
+            timeout=timeout,
         )
 
     def run(
@@ -387,6 +407,7 @@ class DeployHost:
         cwd: Union[None, str, Path] = None,
         check: bool = True,
         verbose_ssh: bool = False,
+        timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
         """
         Command to run on the host via ssh
@@ -398,6 +419,7 @@ class DeployHost:
         @extra_env environment variables to override whe running the command
         @cwd current working directory to run the process in
         @verbose_ssh: Enables verbose logging on ssh connections
+        @timeout: Timeout in seconds for the command to complete
 
         @return subprocess.CompletedProcess result of the ssh command
         """
@@ -463,6 +485,7 @@ class DeployHost:
             stderr=stderr,
             cwd=cwd,
             check=check,
+            timeout=timeout,
         )
 
 
@@ -524,6 +547,7 @@ class DeployGroup:
         cwd: Union[None, str, Path] = None,
         check: bool = True,
         verbose_ssh: bool = False,
+        timeout: float = math.inf,
     ) -> None:
         try:
             proc = host.run_local(
@@ -533,6 +557,7 @@ class DeployGroup:
                 extra_env=extra_env,
                 cwd=cwd,
                 check=check,
+                timeout=timeout,
             )
             results.append(HostResult(host, proc))
         except Exception as e:
@@ -550,6 +575,7 @@ class DeployGroup:
         cwd: Union[None, str, Path] = None,
         check: bool = True,
         verbose_ssh: bool = False,
+        timeout: float = math.inf,
     ) -> None:
         try:
             proc = host.run(
@@ -560,6 +586,7 @@ class DeployGroup:
                 cwd=cwd,
                 check=check,
                 verbose_ssh=verbose_ssh,
+                timeout=timeout,
             )
             results.append(HostResult(host, proc))
         except Exception as e:
@@ -591,6 +618,7 @@ class DeployGroup:
         cwd: Union[None, str, Path] = None,
         check: bool = True,
         verbose_ssh: bool = False,
+        timeout: float = math.inf,
     ) -> DeployResults:
         results: DeployResults = []
         threads = []
@@ -608,6 +636,7 @@ class DeployGroup:
                     cwd=cwd,
                     check=check,
                     verbose_ssh=verbose_ssh,
+                    timeout=timeout,
                 ),
             )
             thread.start()
@@ -630,6 +659,7 @@ class DeployGroup:
         cwd: Union[None, str, Path] = None,
         check: bool = True,
         verbose_ssh: bool = False,
+        timeout: float = math.inf,
     ) -> DeployResults:
         """
         Command to run on the remote host via ssh
@@ -637,6 +667,7 @@ class DeployGroup:
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @cwd current working directory to run the process in
         @verbose_ssh: Enables verbose logging on ssh connections
+        @timeout: Timeout in seconds for the command to complete
 
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
@@ -648,6 +679,7 @@ class DeployGroup:
             cwd=cwd,
             check=check,
             verbose_ssh=verbose_ssh,
+            timeout=timeout,
         )
 
     def run_local(
@@ -658,6 +690,7 @@ class DeployGroup:
         extra_env: Dict[str, str] = {},
         cwd: Union[None, str, Path] = None,
         check: bool = True,
+        timeout: float = math.inf,
     ) -> DeployResults:
         """
         Command to run locally for each host in the group in parallel
@@ -666,6 +699,7 @@ class DeployGroup:
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @cwd current working directory to run the process in
         @extra_env environment variables to override whe running the command
+        @timeout: Timeout in seconds for the command to complete
 
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
@@ -677,6 +711,7 @@ class DeployGroup:
             extra_env=extra_env,
             cwd=cwd,
             check=check,
+            timeout=timeout,
         )
 
     def run_function(

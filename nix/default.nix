@@ -1,10 +1,6 @@
-{ python
-, buildPythonPackage
+{ buildPythonPackage
 , mypy
-, black
 , setuptools
-, ruff
-, pytest
 , glibcLocales
 , pytestCheckHook
 , openssh
@@ -13,7 +9,7 @@
 , stdenv
 }:
 
-buildPythonPackage rec {
+buildPythonPackage {
   name = "deploykit";
   src = ./..;
 
@@ -21,17 +17,7 @@ buildPythonPackage rec {
     setuptools
   ];
 
-  checkInputs = [
-    mypy
-    black
-    glibcLocales
-    pytestCheckHook
-    openssh
-    bash
-    ruff
-  ];
-
-  #preCheck = ''echo "sleep ...."; sleep 99999'';
+  nativeCheckInputs = [ openssh mypy bash glibcLocales pytestCheckHook ];
 
   disabledTests = lib.optionals stdenv.isDarwin [ "test_ssh" ];
 
@@ -39,10 +25,6 @@ buildPythonPackage rec {
   pytestFlagsArray = [ "-s" ];
 
   postCheck = ''
-    echo -e "\x1b[32m## run black\x1b[0m"
-    LC_ALL=en_US.utf-8 black --check .
-    echo -e "\x1b[32m## run ruff\x1b[0m"
-    ruff .
     echo -e "\x1b[32m## run mypy\x1b[0m"
     MYPYPATH=$(pwd):$(pwd)/tests mypy --strict --namespace-packages --explicit-package-bases .
   '';
