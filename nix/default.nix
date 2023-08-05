@@ -1,8 +1,6 @@
 { buildPythonPackage
 , mypy
-, black
 , setuptools
-, ruff
 , glibcLocales
 , pytestCheckHook
 , openssh
@@ -19,15 +17,7 @@ buildPythonPackage {
     setuptools
   ];
 
-  checkInputs = [
-    mypy
-    black
-    glibcLocales
-    pytestCheckHook
-    openssh
-    bash
-    ruff
-  ];
+  nativeCheckInputs = [ openssh mypy bash glibcLocales pytestCheckHook ];
 
   disabledTests = lib.optionals stdenv.isDarwin [ "test_ssh" ];
 
