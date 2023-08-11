@@ -44,7 +44,7 @@ def test_run_function(sshd: Sshd) -> None:
     assert res[0].result
 
 
-def test_timeout(sshd) -> None:
+def test_timeout(sshd: Sshd) -> None:
     g = deploy_group(sshd)
     try:
         g.run("sleep 10", timeout=0.01)
