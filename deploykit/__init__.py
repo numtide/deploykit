@@ -381,7 +381,7 @@ class DeployHost:
         if isinstance(cmd, str):
             cmd = [cmd]
             shell = True
-        displayed_cmd = " ".join(cmd)
+        displayed_cmd = shlex.join(cmd)
         cmdlog.info(
             f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix)
         )
@@ -433,10 +433,10 @@ class DeployHost:
         displayed_cmd = ""
         export_cmd = ""
         if vars:
-            export_cmd = f"export {' '.join(vars)}; "
+            export_cmd = f"export {shlex.join(vars)}; "
             displayed_cmd += export_cmd
         if isinstance(cmd, list):
-            displayed_cmd += " ".join(cmd)
+            displayed_cmd += shlex.join(cmd)
         else:
             displayed_cmd += cmd
         cmdlog.info(
@@ -474,7 +474,7 @@ class DeployHost:
             + ssh_opts
             + [
                 "--",
-                f"{sudo}bash -c {quote(bash_cmd)} -- {' '.join(map(quote, bash_args))}",
+                f"{sudo}bash -c {quote(bash_cmd)} -- {shlex.join(bash_args)}",
             ]
         )
         return self._run(
