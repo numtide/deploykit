@@ -154,6 +154,7 @@ class DeployHost:
         host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
         meta: Dict[str, Any] = {},
         verbose_ssh: bool = False,
+        extra_ssh_opts: List[str] = [],
     ) -> None:
         """
         Creates a DeployHost
@@ -164,6 +165,7 @@ class DeployHost:
         @host_key_check: wether to check ssh host keys
         @verbose_ssh: Enables verbose logging on ssh connections
         @meta: meta attributes associated with the host. Those can be accessed in custom functions passed to `run_function`
+        @extra_ssh_opts: Additional SSH options to use while connecting
         """
         self.host = host
         self.user = user
@@ -177,6 +179,7 @@ class DeployHost:
         self.host_key_check = host_key_check
         self.meta = meta
         self.verbose_ssh = verbose_ssh
+        self.extra_ssh_opts = extra_ssh_opts
 
     def _prefix_output(
         self,
@@ -472,6 +475,7 @@ class DeployHost:
         ssh_cmd = (
             ["ssh", ssh_target]
             + ssh_opts
+            + self.extra_ssh_opts
             + [
                 "--",
                 f"{sudo}bash -c {quote(bash_cmd)} -- {shlex.join(bash_args)}",
