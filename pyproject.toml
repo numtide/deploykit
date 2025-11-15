@@ -7,7 +7,7 @@ name = "deploykit"
 version = "1.2.0"
 description = "Execute commands remote via ssh and locally in parallel with python"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.13"
 license = {text = "MIT"}
 authors = [
     {name = "Jörg Thalheim", email = "joerg@thalheim.io"}
@@ -45,11 +45,12 @@ include = ["deploykit*"]
 [tool.ruff]
 line-length = 88
 
-select = ["E", "F", "I"]
+[tool.ruff.lint]
+select = ["ALL"]
 ignore = [ "E501" ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.13"
 warn_redundant_casts = true
 disallow_untyped_calls = true
 disallow_untyped_defs = true
