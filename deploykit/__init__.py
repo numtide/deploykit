@@ -1,5 +1,3 @@
-
-
 """Execute commands remotely via ssh and locally in parallel with python."""
 
 import fcntl
@@ -147,8 +145,6 @@ class HostKeyCheck(Enum):
 
 
 class DeployHost:
-    
-
     """Represents a host to deploy to via SSH or locally."""
 
     def __init__(
@@ -432,16 +428,20 @@ class DeployHost:
         check: bool = True,
         timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
-        """Command to run locally for the host.
+        """Run command locally for the host.
 
-        @cmd the commmand to run
-        @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
-        @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-        @extra_env environment variables to override whe running the command
-        @cwd current working directory to run the process in
-        @timeout: Timeout in seconds for the command to complete
+        Args:
+            cmd: Command to run (string for shell, list for direct execution)
+            stdout: Redirect stdout (use subprocess.PIPE to capture)
+            stderr: Redirect stderr (use subprocess.PIPE to capture)
+            extra_env: Environment variables to set when running the command
+            cwd: Current working directory to run the process in
+            check: Raise CalledProcessError if command fails
+            timeout: Timeout in seconds for the command to complete
 
-        @return subprocess.CompletedProcess result of the command
+        Returns:
+            subprocess.CompletedProcess result of the command
+
         """
         if extra_env is None:
             extra_env = {}
@@ -509,18 +509,22 @@ class DeployHost:
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
-        """Command to run on the host via ssh.
+        """Run command on the host via ssh.
 
-        @cmd the commmand to run
-        @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
-        @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-        @become_root if the ssh_user is not root than sudo is prepended
-        @extra_env environment variables to override whe running the command
-        @cwd current working directory to run the process in
-        @verbose_ssh: Enables verbose logging on ssh connections
-        @timeout: Timeout in seconds for the command to complete
+        Args:
+            cmd: Command to run (string for shell, list for direct execution)
+            stdout: Redirect stdout (use subprocess.PIPE to capture)
+            stderr: Redirect stderr (use subprocess.PIPE to capture)
+            become_root: Prepend sudo if user is not root
+            extra_env: Environment variables to set when running the command
+            cwd: Current working directory to run the process in
+            verbose_ssh: Enable verbose logging on ssh connections
+            check: Raise CalledProcessError if command fails
+            timeout: Timeout in seconds for the command to complete
 
-        @return subprocess.CompletedProcess result of the ssh command
+        Returns:
+            subprocess.CompletedProcess result of the ssh command
+
         """
         if extra_env is None:
             extra_env = {}
@@ -743,15 +747,21 @@ class DeployGroup:
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> DeployResults:
-        """Command to run on the remote host via ssh.
+        """Run command on all remote hosts via ssh in parallel.
 
-        @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
-        @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-        @cwd current working directory to run the process in
-        @verbose_ssh: Enables verbose logging on ssh connections
-        @timeout: Timeout in seconds for the command to complete.
+        Args:
+            cmd: Command to run (string for shell, list for direct execution)
+            stdout: Redirect stdout (use subprocess.PIPE to capture)
+            stderr: Redirect stderr (use subprocess.PIPE to capture)
+            extra_env: Environment variables to set when running the command
+            cwd: Current working directory to run the process in
+            check: Raise RuntimeError if any command fails
+            verbose_ssh: Enable verbose logging on ssh connections
+            timeout: Timeout in seconds for the command to complete
 
-        @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
+        Returns:
+            List of HostResult containing each host and its command result
+
         """
         if extra_env is None:
             extra_env = {}
@@ -776,16 +786,20 @@ class DeployGroup:
         check: bool = True,
         timeout: float = math.inf,
     ) -> DeployResults:
-        """Command to run locally for each host in the group in parallel.
+        """Run command locally for each host in the group in parallel.
 
-        @cmd the commmand to run
-        @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
-        @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-        @cwd current working directory to run the process in
-        @extra_env environment variables to override whe running the command
-        @timeout: Timeout in seconds for the command to complete.
+        Args:
+            cmd: Command to run (string for shell, list for direct execution)
+            stdout: Redirect stdout (use subprocess.PIPE to capture)
+            stderr: Redirect stderr (use subprocess.PIPE to capture)
+            extra_env: Environment variables to set when running the command
+            cwd: Current working directory to run the process in
+            check: Raise RuntimeError if any command fails
+            timeout: Timeout in seconds for the command to complete
 
-        @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
+        Returns:
+            List of HostResult containing each host and its command result
+
         """
         if extra_env is None:
             extra_env = {}
@@ -807,7 +821,13 @@ class DeployGroup:
     ) -> list[HostResult[T]]:
         """Run function for each host in the group in parallel.
 
-        @func the function to call
+        Args:
+            func: Function to call for each host
+            check: Raise RuntimeError if any function call fails
+
+        Returns:
+            List of HostResult containing each host and its function result
+
         """
         threads = []
         results: list[HostResult[T]] = [
@@ -870,19 +890,19 @@ def run(
 ) -> subprocess.CompletedProcess[Any]:
     """Run command locally.
 
-    @cmd if this parameter is a string the command is interpreted as a shell command,
-         otherwise if it is a list, than the first list element is the command
-         and the remaining list elements are passed as arguments to the
-         command.
-    @text when true, file objects for stdout and stderr are opened in text mode.
-    @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
-    @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
-    @extra_env environment variables to override whe running the command
-    @cwd current working directory to run the process in
-    @check If check is true, and the process exits with a non-zero exit code, a
-           CalledProcessError exception will be raised. Attributes of that exception
-           hold the arguments, the exit code, and stdout and stderr if they were
-           captured.
+    Args:
+        cmd: Command to run (string for shell, list for direct execution where
+             first element is the command and remaining are arguments)
+        text: Open stdout and stderr in text mode when True
+        stdout: Redirect stdout (use subprocess.PIPE to capture)
+        stderr: Redirect stderr (use subprocess.PIPE to capture)
+        extra_env: Environment variables to set when running the command
+        cwd: Current working directory to run the process in
+        check: Raise CalledProcessError if the process exits with non-zero code
+
+    Returns:
+        subprocess.CompletedProcess result of the command
+
     """
     if extra_env is None:
         extra_env = {}
@@ -913,15 +933,22 @@ def parse_hosts(
     domain_suffix: str = "",
     default_user: str | None = None,
 ) -> DeployGroup:
-    """Parse comma seperated string of hosts.
+    """Parse comma separated string of hosts.
 
-    @hosts A comma seperated list of hostnames with optional username (defaulting to root) i.e. admin@node1.example.com,admin@node2.example.com
-    @host_key_check wether to check ssh host keys
-    @forward_agent wether to forward the ssh agent
-    @domain_suffix a string to append to each hostname, i.e. hosts=admin@node0, domain_suffix=example.com -> admin@node0.example.com
-    @default_user user to choose if no ssh user is specified with the hostname
+    Args:
+        hosts: Comma separated list of hostnames with optional username
+               (e.g., "admin@node1.example.com,admin@node2.example.com")
+        host_key_check: SSH host key verification mode
+        key: Path to SSH private key file
+        forward_agent: Whether to forward the SSH agent
+        domain_suffix: String to append to each hostname
+                      (e.g., hosts="admin@node0", domain_suffix="example.com"
+                       results in "admin@node0.example.com")
+        default_user: User to use if no SSH user is specified with the hostname
 
-    @return A deploy group containing all hosts specified in hosts
+    Returns:
+        DeployGroup containing all hosts specified in the hosts string
+
     """
     deploy_hosts = []
     for h in hosts.split(","):
