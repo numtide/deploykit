@@ -11,7 +11,7 @@ python";
   };
 
   outputs = inputs @ { flake-parts, nixpkgs, ... }:
-    (flake-parts.lib.evalFlakeModule { inherit inputs; } ({ lib, pkgs, ... }: {
+    (flake-parts.lib.evalFlakeModule { inherit inputs; } ({ lib, ... }: {
       imports = [
         inputs.treefmt-nix.flakeModule
       ];
@@ -24,7 +24,7 @@ python";
         packages.deploykit = pkgs.python3.pkgs.callPackage ./nix/default.nix { };
         packages.default = self'.packages.deploykit;
         devShells.default = pkgs.callPackage ./nix/shell.nix { };
-        treefmt = import ./treefmt.nix;
+        treefmt = ./treefmt.nix;
       };
     })).config.flake;
 }
