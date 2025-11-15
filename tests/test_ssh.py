@@ -3,9 +3,9 @@ import pwd
 import subprocess
 
 import pytest
-from sshd import Sshd
 
 from deploykit import DeployGroup, DeployHost, HostKeyCheck, parse_hosts
+from tests.sshd import Sshd
 
 
 def deploy_group(sshd: Sshd) -> DeployGroup:
