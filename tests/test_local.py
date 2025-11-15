@@ -17,21 +17,26 @@ def test_run_failure() -> None:
     except Exception:
         pass
     else:
-        assert False, "Command should have raised an error"
+        msg = "Command should have raised an error"
+        raise AssertionError(msg)
 
 
 def test_run_environment() -> None:
-    p1 = run("echo $env_var", stdout=subprocess.PIPE, extra_env=dict(env_var="true"))
+    p1 = run("echo $env_var", stdout=subprocess.PIPE, extra_env={"env_var": "true"})
     assert p1.stdout == "true\n"
 
     hosts = parse_hosts("some_host")
     p2 = hosts.run_local(
-        "echo $env_var", extra_env=dict(env_var="true"), stdout=subprocess.PIPE
+        "echo $env_var",
+        extra_env={"env_var": "true"},
+        stdout=subprocess.PIPE,
     )
     assert p2[0].result.stdout == "true\n"
 
     p3 = hosts.run_local(
-        ["env"], extra_env=dict(env_var="true"), stdout=subprocess.PIPE
+        ["env"],
+        extra_env={"env_var": "true"},
+        stdout=subprocess.PIPE,
     )
     assert "env_var=true" in p3[0].result.stdout
 
@@ -59,7 +64,8 @@ def test_timeout() -> None:
     except Exception:
         pass
     else:
-        assert False, "should have raised TimeoutExpired"
+        msg = "should have raised TimeoutExpired"
+        raise AssertionError(msg)
 
 
 def test_run_function() -> None:
@@ -79,7 +85,8 @@ def test_run_exception() -> None:
     except Exception:
         pass
     else:
-        assert False, "should have raised Exception"
+        msg = "should have raised Exception"
+        raise AssertionError(msg)
 
 
 def test_run_function_exception() -> None:
@@ -92,7 +99,8 @@ def test_run_function_exception() -> None:
     except Exception:
         pass
     else:
-        assert False, "should have raised Exception"
+        msg = "should have raised Exception"
+        raise AssertionError(msg)
 
 
 def test_run_local_non_shell() -> None:

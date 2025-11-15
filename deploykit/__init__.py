@@ -1,3 +1,5 @@
+
+
 import fcntl
 import logging
 import math
@@ -7,6 +9,7 @@ import shlex
 import subprocess
 import sys
 import time
+from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from enum import Enum
 from pathlib import Path
@@ -15,10 +18,8 @@ from threading import Thread
 from typing import (
     IO,
     Any,
-    Callable,
     Dict,
     Generic,
-    Iterator,
     List,
     Literal,
     Optional,
@@ -37,22 +38,20 @@ def ansi_color(color: int) -> str:
 
 
 class CommandFormatter(logging.Formatter):
-    """
-    print errors in red and warnings in yellow
-    """
+    """print errors in red and warnings in yellow."""
 
     def __init__(self) -> None:
         super().__init__(
-            "%(prefix_color)s[%(command_prefix)s]%(color_reset)s %(color)s%(message)s%(color_reset)s"
+            "%(prefix_color)s[%(command_prefix)s]%(color_reset)s %(color)s%(message)s%(color_reset)s",
         )
-        self.hostnames: List[str] = []
+        self.hostnames: list[str] = []
         self.hostname_color_offset = 1  # first host shouldn't get agressive red
 
     def formatMessage(self, record: logging.LogRecord) -> str:
         colorcode = 0
         if record.levelno == logging.ERROR:
             colorcode = 31  # red
-        if record.levelno == logging.WARN:
+        if record.levelno == logging.WARNING:
             colorcode = 33  # yellow
 
         color, prefix_color, color_reset = "", "", ""
@@ -62,9 +61,9 @@ class CommandFormatter(logging.Formatter):
             prefix_color = ansi_color(self.hostname_colorcode(command_prefix))
             color_reset = "\x1b[0m"
 
-        setattr(record, "color", color)
-        setattr(record, "prefix_color", prefix_color)
-        setattr(record, "color_reset", color_reset)
+        record.color = color
+        record.prefix_color = prefix_color
+        record.color_reset = color_reset
 
         return super().formatMessage(record)
 
@@ -77,7 +76,7 @@ class CommandFormatter(logging.Formatter):
         return 31 + (index + self.hostname_color_offset) % 7
 
 
-def setup_loggers() -> Tuple[logging.Logger, logging.Logger]:
+def setup_loggers() -> tuple[logging.Logger, logging.Logger]:
     # If we use the default logger here (logging.error etc) or a logger called
     # "deploykit", then cmdlog messages are also posted on the default logger.
     # To avoid this message duplication, we set up a main and command logger
@@ -112,7 +111,7 @@ error = kitlog.error
 
 
 @contextmanager
-def _pipe() -> Iterator[Tuple[IO[str], IO[str]]]:
+def _pipe() -> Iterator[tuple[IO[str], IO[str]]]:
     (pipe_r, pipe_w) = os.pipe()
     read_end = os.fdopen(pipe_r, "r")
     write_end = os.fdopen(pipe_w, "w")
@@ -143,21 +142,22 @@ class HostKeyCheck(Enum):
 
 
 class DeployHost:
+    
+
     def __init__(
         self,
         host: str,
-        user: Optional[str] = None,
-        port: Optional[int] = None,
-        key: Optional[str] = None,
+        user: str | None = None,
+        port: int | None = None,
+        key: str | None = None,
         forward_agent: bool = False,
-        command_prefix: Optional[str] = None,
+        command_prefix: str | None = None,
         host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
-        meta: Dict[str, Any] = {},
+        meta: dict[str, Any] | None = None,
         verbose_ssh: bool = False,
-        extra_ssh_opts: List[str] = [],
+        extra_ssh_opts: list[str] | None = None,
     ) -> None:
-        """
-        Creates a DeployHost
+        """Creates a DeployHost
         @host the hostname to connect to via ssh
         @port the port to connect to via ssh
         @forward_agent: wheter to forward ssh agent
@@ -165,8 +165,12 @@ class DeployHost:
         @host_key_check: wether to check ssh host keys
         @verbose_ssh: Enables verbose logging on ssh connections
         @meta: meta attributes associated with the host. Those can be accessed in custom functions passed to `run_function`
-        @extra_ssh_opts: Additional SSH options to use while connecting
+        @extra_ssh_opts: Additional SSH options to use while connecting.
         """
+        if extra_ssh_opts is None:
+            extra_ssh_opts = []
+        if meta is None:
+            meta = {}
         self.host = host
         self.user = user
         self.port = port
@@ -184,12 +188,12 @@ class DeployHost:
     def _prefix_output(
         self,
         displayed_cmd: str,
-        print_std_fd: Optional[IO[str]],
-        print_err_fd: Optional[IO[str]],
-        stdout: Optional[IO[str]],
-        stderr: Optional[IO[str]],
+        print_std_fd: IO[str] | None,
+        print_err_fd: IO[str] | None,
+        stdout: IO[str] | None,
+        stderr: IO[str] | None,
         timeout: float = math.inf,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         rlist = []
         if print_std_fd is not None:
             rlist.append(print_std_fd)
@@ -212,8 +216,10 @@ class DeployHost:
             r, _, _ = select.select(rlist, [], [], min(timeout, NO_OUTPUT_TIMEOUT))
 
             def print_from(
-                print_fd: IO[str], print_buf: str, is_err: bool = False
-            ) -> Tuple[float, str]:
+                print_fd: IO[str],
+                print_buf: str,
+                is_err: bool = False,
+            ) -> tuple[float, str]:
                 read = os.read(print_fd.fileno(), 4096)
                 if len(read) == 0:
                     rlist.remove(print_fd)
@@ -225,12 +231,13 @@ class DeployHost:
                     for line in lines:
                         if not is_err:
                             cmdlog.info(
-                                line, extra=dict(command_prefix=self.command_prefix)
+                                line,
+                                extra={"command_prefix": self.command_prefix},
                             )
-                            pass
                         else:
                             cmdlog.error(
-                                line, extra=dict(command_prefix=self.command_prefix)
+                                line,
+                                extra={"command_prefix": self.command_prefix},
                             )
                     print_buf = ""
                 last_output = time.time()
@@ -238,11 +245,15 @@ class DeployHost:
 
             if print_std_fd in r and print_std_fd is not None:
                 (last_output, print_std_buf) = print_from(
-                    print_std_fd, print_std_buf, is_err=False
+                    print_std_fd,
+                    print_std_buf,
+                    is_err=False,
                 )
             if print_err_fd in r and print_err_fd is not None:
                 (last_output, print_err_buf) = print_from(
-                    print_err_fd, print_err_buf, is_err=True
+                    print_err_fd,
+                    print_err_buf,
+                    is_err=True,
                 )
 
             now = time.time()
@@ -251,10 +262,10 @@ class DeployHost:
                 elapsed_msg = time.strftime("%H:%M:%S", time.gmtime(elapsed))
                 cmdlog.warn(
                     f"still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)",
-                    extra=dict(command_prefix=self.command_prefix),
+                    extra={"command_prefix": self.command_prefix},
                 )
 
-            def handle_fd(fd: Optional[IO[Any]]) -> str:
+            def handle_fd(fd: IO[Any] | None) -> str:
                 if fd and fd in r:
                     read = os.read(fd.fileno(), 4096)
                     if len(read) == 0:
@@ -272,16 +283,18 @@ class DeployHost:
 
     def _run(
         self,
-        cmd: List[str],
+        cmd: list[str],
         displayed_cmd: str,
         shell: bool,
         stdout: FILE = None,
         stderr: FILE = None,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
+        if extra_env is None:
+            extra_env = {}
         with ExitStack() as stack:
             read_std_fd, write_std_fd = (None, None)
             read_err_fd, write_err_fd = (None, None)
@@ -296,7 +309,8 @@ class DeployHost:
             elif stdout == subprocess.PIPE:
                 stdout_read, stdout_write = stack.enter_context(_pipe())
             else:
-                raise Exception(f"unsupported value for stdout parameter: {stdout}")
+                msg = f"unsupported value for stdout parameter: {stdout}"
+                raise Exception(msg)
 
             if stderr is None:
                 stderr_read = None
@@ -304,7 +318,8 @@ class DeployHost:
             elif stderr == subprocess.PIPE:
                 stderr_read, stderr_write = stack.enter_context(_pipe())
             else:
-                raise Exception(f"unsupported value for stderr parameter: {stderr}")
+                msg = f"unsupported value for stderr parameter: {stderr}"
+                raise Exception(msg)
 
             env = os.environ.copy()
             env.update(extra_env)
@@ -346,30 +361,33 @@ class DeployHost:
                 if ret != 0:
                     if check:
                         raise subprocess.CalledProcessError(
-                            ret, cmd=cmd, output=stdout_data, stderr=stderr_data
+                            ret,
+                            cmd=cmd,
+                            output=stdout_data,
+                            stderr=stderr_data,
                         )
-                    else:
-                        cmdlog.warning(
-                            f"[Command failed: {ret}] {displayed_cmd}",
-                            extra=dict(command_prefix=self.command_prefix),
-                        )
+                    cmdlog.warning(
+                        f"[Command failed: {ret}] {displayed_cmd}",
+                        extra={"command_prefix": self.command_prefix},
+                    )
                 return subprocess.CompletedProcess(
-                    cmd, ret, stdout=stdout_data, stderr=stderr_data
+                    cmd,
+                    ret,
+                    stdout=stdout_data,
+                    stderr=stderr_data,
                 )
-        raise RuntimeError("unreachable")
 
     def run_local(
         self,
-        cmd: Union[str, List[str]],
+        cmd: str | list[str],
         stdout: FILE = None,
         stderr: FILE = None,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
-        """
-        Command to run locally for the host
+        """Command to run locally for the host.
 
         @cmd the commmand to run
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
@@ -380,13 +398,16 @@ class DeployHost:
 
         @return subprocess.CompletedProcess result of the command
         """
+        if extra_env is None:
+            extra_env = {}
         shell = False
         if isinstance(cmd, str):
             cmd = [cmd]
             shell = True
         displayed_cmd = shlex.join(cmd)
         cmdlog.info(
-            f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix)
+            f"$ {displayed_cmd}",
+            extra={"command_prefix": self.command_prefix},
         )
         return self._run(
             cmd,
@@ -402,18 +423,17 @@ class DeployHost:
 
     def run(
         self,
-        cmd: Union[str, List[str]],
+        cmd: str | list[str],
         stdout: FILE = None,
         stderr: FILE = None,
         become_root: bool = False,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> subprocess.CompletedProcess[str]:
-        """
-        Command to run on the host via ssh
+        """Command to run on the host via ssh.
 
         @cmd the commmand to run
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
@@ -426,6 +446,8 @@ class DeployHost:
 
         @return subprocess.CompletedProcess result of the ssh command
         """
+        if extra_env is None:
+            extra_env = {}
         sudo = ""
         if become_root and self.user != "root":
             sudo = "sudo -- "
@@ -443,13 +465,11 @@ class DeployHost:
         else:
             displayed_cmd += cmd
         cmdlog.info(
-            f"$ {displayed_cmd}", extra=dict(command_prefix=self.command_prefix)
+            f"$ {displayed_cmd}",
+            extra={"command_prefix": self.command_prefix},
         )
 
-        if self.user is not None:
-            ssh_target = f"{self.user}@{self.host}"
-        else:
-            ssh_target = self.host
+        ssh_target = f"{self.user}@{self.host}" if self.user is not None else self.host
 
         ssh_opts = ["-A"] if self.forward_agent else []
         if self.port:
@@ -472,15 +492,14 @@ class DeployHost:
         else:
             bash_cmd += cmd
         # FIXME we assume bash to be present here? Should be documented...
-        ssh_cmd = (
-            ["ssh", ssh_target]
-            + ssh_opts
-            + self.extra_ssh_opts
-            + [
-                "--",
-                f"{sudo}bash -c {quote(bash_cmd)} -- {shlex.join(bash_args)}",
-            ]
-        )
+        ssh_cmd = [
+            "ssh",
+            ssh_target,
+            *ssh_opts,
+            *self.extra_ssh_opts,
+            "--",
+            f"{sudo}bash -c {quote(bash_cmd)} -- {shlex.join(bash_args)}",
+        ]
         return self._run(
             ssh_cmd,
             displayed_cmd,
@@ -496,37 +515,33 @@ class DeployHost:
 T = TypeVar("T")
 
 
-class HostResult(Generic[T]):
-    def __init__(self, host: DeployHost, result: Union[T, Exception]) -> None:
+class HostResult[T]:
+    def __init__(self, host: DeployHost, result: T | Exception) -> None:
         self.host = host
         self._result = result
 
     @property
-    def error(self) -> Optional[Exception]:
-        """
-        Returns an error if the command failed
-        """
+    def error(self) -> Exception | None:
+        """Returns an error if the command failed."""
         if isinstance(self._result, Exception):
             return self._result
         return None
 
     @property
     def result(self) -> T:
-        """
-        Unwrap the result
-        """
+        """Unwrap the result."""
         if isinstance(self._result, Exception):
             raise self._result
         return self._result
 
 
-DeployResults = List[HostResult[subprocess.CompletedProcess[str]]]
+DeployResults = list[HostResult[subprocess.CompletedProcess[str]]]
 
 
 def _worker(
     func: Callable[[DeployHost], T],
     host: DeployHost,
-    results: List[HostResult[T]],
+    results: list[HostResult[T]],
     idx: int,
 ) -> None:
     try:
@@ -537,22 +552,24 @@ def _worker(
 
 
 class DeployGroup:
-    def __init__(self, hosts: List[DeployHost]) -> None:
+    def __init__(self, hosts: list[DeployHost]) -> None:
         self.hosts = hosts
 
     def _run_local(
         self,
-        cmd: Union[str, List[str]],
+        cmd: str | list[str],
         host: DeployHost,
         results: DeployResults,
         stdout: FILE = None,
         stderr: FILE = None,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> None:
+        if extra_env is None:
+            extra_env = {}
         try:
             proc = host.run_local(
                 cmd,
@@ -570,17 +587,19 @@ class DeployGroup:
 
     def _run_remote(
         self,
-        cmd: Union[str, List[str]],
+        cmd: str | list[str],
         host: DeployHost,
         results: DeployResults,
         stdout: FILE = None,
         stderr: FILE = None,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> None:
+        if extra_env is None:
+            extra_env = {}
         try:
             proc = host.run(
                 cmd,
@@ -597,51 +616,54 @@ class DeployGroup:
             kitlog.exception(e)
             results.append(HostResult(host, e))
 
-    def _reraise_errors(self, results: List[HostResult[Any]]) -> None:
+    def _reraise_errors(self, results: list[HostResult[Any]]) -> None:
         errors = 0
         for result in results:
             e = result.error
             if e:
                 cmdlog.error(
                     f"failed with: {e}",
-                    extra=dict(command_prefix=result.host.command_prefix),
+                    extra={"command_prefix": result.host.command_prefix},
                 )
                 errors += 1
         if errors > 0:
+            msg = f"{errors} hosts failed with an error. Check the logs above"
             raise Exception(
-                f"{errors} hosts failed with an error. Check the logs above"
+                msg,
             )
 
     def _run(
         self,
-        cmd: Union[str, List[str]],
+        cmd: str | list[str],
         local: bool = False,
         stdout: FILE = None,
         stderr: FILE = None,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> DeployResults:
+        if extra_env is None:
+            extra_env = {}
         results: DeployResults = []
         threads = []
         for host in self.hosts:
             fn = self._run_local if local else self._run_remote
             thread = Thread(
                 target=fn,
-                kwargs=dict(
-                    results=results,
-                    cmd=cmd,
-                    host=host,
-                    stdout=stdout,
-                    stderr=stderr,
-                    extra_env=extra_env,
-                    cwd=cwd,
-                    check=check,
-                    verbose_ssh=verbose_ssh,
-                    timeout=timeout,
-                ),
+                kwargs={
+                    "results": results,
+                    "cmd": cmd,
+                    "host": host,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "extra_env": extra_env,
+                    "cwd": cwd,
+                    "check": check,
+                    "verbose_ssh": verbose_ssh,
+                    "timeout": timeout,
+                },
             )
             thread.start()
             threads.append(thread)
@@ -656,25 +678,26 @@ class DeployGroup:
 
     def run(
         self,
-        cmd: Union[str, List[str]],
+        cmd: str | list[str],
         stdout: FILE = None,
         stderr: FILE = None,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> DeployResults:
-        """
-        Command to run on the remote host via ssh
+        """Command to run on the remote host via ssh
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @cwd current working directory to run the process in
         @verbose_ssh: Enables verbose logging on ssh connections
-        @timeout: Timeout in seconds for the command to complete
+        @timeout: Timeout in seconds for the command to complete.
 
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
+        if extra_env is None:
+            extra_env = {}
         return self._run(
             cmd,
             stdout=stdout,
@@ -688,25 +711,26 @@ class DeployGroup:
 
     def run_local(
         self,
-        cmd: Union[str, List[str]],
+        cmd: str | list[str],
         stdout: FILE = None,
         stderr: FILE = None,
-        extra_env: Dict[str, str] = {},
-        cwd: Union[None, str, Path] = None,
+        extra_env: dict[str, str] | None = None,
+        cwd: None | str | Path = None,
         check: bool = True,
         timeout: float = math.inf,
     ) -> DeployResults:
-        """
-        Command to run locally for each host in the group in parallel
+        """Command to run locally for each host in the group in parallel
         @cmd the commmand to run
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @cwd current working directory to run the process in
         @extra_env environment variables to override whe running the command
-        @timeout: Timeout in seconds for the command to complete
+        @timeout: Timeout in seconds for the command to complete.
 
         @return a lists of tuples containing DeployNode and the result of the command for this DeployNode
         """
+        if extra_env is None:
+            extra_env = {}
         return self._run(
             cmd,
             local=True,
@@ -719,15 +743,16 @@ class DeployGroup:
         )
 
     def run_function(
-        self, func: Callable[[DeployHost], T], check: bool = True
-    ) -> List[HostResult[T]]:
-        """
-        Function to run for each host in the group in parallel
+        self,
+        func: Callable[[DeployHost], T],
+        check: bool = True,
+    ) -> list[HostResult[T]]:
+        """Function to run for each host in the group in parallel.
 
         @func the function to call
         """
         threads = []
-        results: List[HostResult[T]] = [
+        results: list[HostResult[T]] = [
             HostResult(h, Exception(f"No result set for thread {i}"))
             for (i, h) in enumerate(self.hosts)
         ]
@@ -748,45 +773,44 @@ class DeployGroup:
         return results
 
     def filter(self, pred: Callable[[DeployHost], bool]) -> "DeployGroup":
-        """Return a new DeployGroup with the results filtered by the predicate"""
+        """Return a new DeployGroup with the results filtered by the predicate."""
         return DeployGroup(list(filter(pred, self.hosts)))
 
 
 @overload
 def run(
-    cmd: Union[List[str], str],
+    cmd: list[str] | str,
     text: Literal[True] = ...,
     stdout: FILE = ...,
     stderr: FILE = ...,
-    extra_env: Dict[str, str] = ...,
-    cwd: Union[None, str, Path] = ...,
+    extra_env: dict[str, str] = ...,
+    cwd: None | str | Path = ...,
     check: bool = ...,
 ) -> subprocess.CompletedProcess[str]: ...
 
 
 @overload
 def run(
-    cmd: Union[List[str], str],
+    cmd: list[str] | str,
     text: Literal[False],
     stdout: FILE = ...,
     stderr: FILE = ...,
-    extra_env: Dict[str, str] = ...,
-    cwd: Union[None, str, Path] = ...,
+    extra_env: dict[str, str] = ...,
+    cwd: None | str | Path = ...,
     check: bool = ...,
 ) -> subprocess.CompletedProcess[bytes]: ...
 
 
 def run(
-    cmd: Union[List[str], str],
+    cmd: list[str] | str,
     text: bool = True,
     stdout: FILE = None,
     stderr: FILE = None,
-    extra_env: Dict[str, str] = {},
-    cwd: Union[None, str, Path] = None,
+    extra_env: dict[str, str] | None = None,
+    cwd: None | str | Path = None,
     check: bool = True,
 ) -> subprocess.CompletedProcess[Any]:
-    """
-    Run command locally
+    """Run command locally.
 
     @cmd if this parameter is a string the command is interpreted as a shell command,
          otherwise if it is a list, than the first list element is the command
@@ -802,6 +826,8 @@ def run(
            hold the arguments, the exit code, and stdout and stderr if they were
            captured.
     """
+    if extra_env is None:
+        extra_env = {}
     if isinstance(cmd, list):
         info("$ " + " ".join(cmd))
     else:
@@ -824,13 +850,12 @@ def run(
 def parse_hosts(
     hosts: str,
     host_key_check: HostKeyCheck = HostKeyCheck.STRICT,
-    key: Optional[str] = None,
+    key: str | None = None,
     forward_agent: bool = False,
     domain_suffix: str = "",
-    default_user: Optional[str] = None,
+    default_user: str | None = None,
 ) -> DeployGroup:
-    """
-    Parse comma seperated string of hosts
+    """Parse comma seperated string of hosts.
 
     @hosts A comma seperated list of hostnames with optional username (defaulting to root) i.e. admin@node1.example.com,admin@node2.example.com
     @host_key_check wether to check ssh host keys
@@ -844,7 +869,7 @@ def parse_hosts(
     for h in hosts.split(","):
         parts = h.split("@")
         if len(parts) > 1:
-            user: Optional[str] = parts[0]
+            user: str | None = parts[0]
             hostname = parts[1]
         else:
             user = default_user
@@ -862,6 +887,6 @@ def parse_hosts(
                 key=key,
                 host_key_check=host_key_check,
                 forward_agent=forward_agent,
-            )
+            ),
         )
     return DeployGroup(deploy_hosts)

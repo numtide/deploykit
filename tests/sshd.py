@@ -2,10 +2,10 @@ import os
 import shutil
 import subprocess
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from sys import platform
 from tempfile import TemporaryDirectory
-from typing import Iterator, Optional
 
 import pytest
 from command import Command
@@ -20,7 +20,7 @@ class Sshd:
 
 
 class SshdConfig:
-    def __init__(self, path: str, key: str, preload_lib: Optional[str]) -> None:
+    def __init__(self, path: str, key: str, preload_lib: str | None) -> None:
         self.path = path
         self.key = key
         self.preload_lib = preload_lib
@@ -54,7 +54,7 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
         SetEnv PATH={os.environ.get("PATH", "")}
         MaxStartups 64:30:256
         AuthorizedKeysFile {host_key}.pub
-        """
+        """,
         )
 
         lib_path = None
@@ -84,9 +84,10 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
     if sshd_config.preload_lib is not None:
         bash = shutil.which("bash")
         assert bash is not None
-        env = dict(LD_PRELOAD=str(sshd_config.preload_lib), LOGIN_SHELL=bash)
+        env = {"LD_PRELOAD": str(sshd_config.preload_lib), "LOGIN_SHELL": bash}
     proc = command.run(
-        [sshd, "-f", sshd_config.path, "-D", "-p", str(port)], extra_env=env
+        [sshd, "-f", sshd_config.path, "-D", "-p", str(port)],
+        extra_env=env,
     )
 
     while True:
@@ -104,7 +105,8 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
                     "-p",
                     str(port),
                     "true",
-                ]
+                ],
+                check=False,
             ).returncode
             == 0
         ):
@@ -113,5 +115,6 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
         else:
             rc = proc.poll()
             if rc is not None:
-                raise Exception(f"sshd processes was terminated with {rc}")
+                msg = f"sshd processes was terminated with {rc}"
+                raise Exception(msg)
             time.sleep(0.1)

@@ -54,12 +54,10 @@ def main() -> None:
     # By default all functions will throw a subprocess.CalledProcess exception if a command fails.
     # When check=False is passed, instead a subprocess.CompletedProcess value is returned and the user
     # can check the result of command by inspecting the `returncode` attribute
-    runs = g.run_local("false", check=False)
-    print(runs[0].result.returncode)
+    g.run_local("false", check=False)
 
     # To capture the output of a command, set stdout/stderr parameter
-    runs = g.run_local("hostname", stdout=subprocess.PIPE)
-    print(runs[0].result.stdout)
+    g.run_local("hostname", stdout=subprocess.PIPE)
 
     # To select a subset of the hosts, you can use the filter function
     g2 = g.filter(lambda h: h.host == "host2")
