@@ -4,41 +4,18 @@ import socket
 
 import pytest
 
-NEXT_PORT = 10000
-
-
-def check_port(port: int) -> bool:
-    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    with tcp, udp:
-        try:
-            tcp.bind(("127.0.0.1", port))
-            udp.bind(("127.0.0.1", port))
-            return True
-        except socket.error:
-            return False
-
-
-def check_port_range(port_range: range) -> bool:
-    for port in port_range:
-        if not check_port(port):
-            return False
-    return True
-
 
 class Ports:
-    def allocate(self, num: int) -> int:
+    def allocate(self) -> socket.socket:
         """
-        Allocates
+        Allocate a single free port by binding to port 0.
+
+        Returns a bound socket. The caller is responsible for closing the socket
+        when done. Use sock.getsockname()[1] to get the allocated port number.
         """
-        global NEXT_PORT
-        while NEXT_PORT + num <= 65535:
-            start = NEXT_PORT
-            NEXT_PORT += num
-            if not check_port_range(range(start, NEXT_PORT)):
-                continue
-            return start
-        raise Exception("cannot find enough free port")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("127.0.0.1", 0))
+        return sock
 
 
 @pytest.fixture

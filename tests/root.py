@@ -8,15 +8,11 @@ PROJECT_ROOT = TEST_ROOT.parent
 
 @pytest.fixture(scope="session")
 def project_root() -> Path:
-    """
-    Root directory of the tests
-    """
+    """Root directory of the project."""
     return PROJECT_ROOT
 
 
 @pytest.fixture(scope="session")
 def test_root() -> Path:
-    """
-    Root directory of the tests
-    """
+    """Root directory of the tests."""
     return TEST_ROOT

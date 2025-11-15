@@ -1,11 +1,76 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deploykit"
+version = "1.2.0"
+description = "Execute commands remote via ssh and locally in parallel with python"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Jörg Thalheim", email = "joerg@thalheim.io"}
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Installation/Setup",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/numtide/deploykit"
+Repository = "https://github.com/numtide/deploykit"
+
+[tool.setuptools]
+zip-safe = true
+
+[tool.setuptools.packages.find]
+include = ["deploykit*"]
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
 [tool.ruff]
 line-length = 88
 
-select = ["E", "F", "I"]
-ignore = [ "E501" ]
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "E501",    # line too long
+    "FBT",     # flake8-boolean-trap
+    "PLR0913", # too many arguments
+    "PLR0912", # too many branches
+    "S603",    # subprocess call (library is for running commands)
+    "S607",    # partial executable path
+    "FIX",     # allow FIXME comments
+    "TD",      # allow TODO comments
+    "T201",    # allow print statements
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",   # use of assert in tests is expected
+    "D",      # no docstrings required in tests
+]
+"examples/**/*.py" = [
+    "D103",    # no docstrings required in examples
+    "ERA001",  # commented code allowed in examples
+]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.13"
 warn_redundant_casts = true
 disallow_untyped_calls = true
 disallow_untyped_defs = true

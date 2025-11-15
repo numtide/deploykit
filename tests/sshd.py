@@ -2,10 +2,10 @@ import os
 import shutil
 import subprocess
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from sys import platform
 from tempfile import TemporaryDirectory
-from typing import Iterator, Optional
 
 import pytest
 from command import Command
@@ -20,7 +20,7 @@ class Sshd:
 
 
 class SshdConfig:
-    def __init__(self, path: str, key: str, preload_lib: Optional[str]) -> None:
+    def __init__(self, path: str, key: str, preload_lib: str | None) -> None:
         self.path = path
         self.key = key
         self.preload_lib = preload_lib
@@ -30,8 +30,8 @@ class SshdConfig:
 def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
     # FIXME, if any parent of `project_root` is world-writable than sshd will refuse it.
     with TemporaryDirectory(dir=project_root) as _dir:
-        dir = Path(_dir)
-        host_key = dir / "host_ssh_host_ed25519_key"
+        tmp_dir = Path(_dir)
+        host_key = tmp_dir / "host_ssh_host_ed25519_key"
         subprocess.run(
             [
                 "ssh-keygen",
@@ -45,7 +45,7 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
             check=True,
         )
 
-        sshd_config = dir / "sshd_config"
+        sshd_config = tmp_dir / "sshd_config"
         sshd_config.write_text(
             f"""
         HostKey {host_key}
@@ -54,13 +54,13 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
         SetEnv PATH={os.environ.get("PATH", "")}
         MaxStartups 64:30:256
         AuthorizedKeysFile {host_key}.pub
-        """
+        """,
         )
 
         lib_path = None
         if platform == "linux":
             # This enforces a login shell by overriding the login shell of `getpwnam(3)`
-            lib_path = str(dir / "libgetpwnam-preload.so")
+            lib_path = str(tmp_dir / "libgetpwnam-preload.so")
             subprocess.run(
                 [
                     os.environ.get("CC", "cc"),
@@ -77,16 +77,19 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
 
 @pytest.fixture
 def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Sshd]:
-    port = ports.allocate(1)
+    sock = ports.allocate()
+    port = sock.getsockname()[1]
+    sock.close()  # Release the port so sshd can bind to it
     sshd = shutil.which("sshd")
     assert sshd is not None, "no sshd binary found"
     env = {}
     if sshd_config.preload_lib is not None:
         bash = shutil.which("bash")
         assert bash is not None
-        env = dict(LD_PRELOAD=str(sshd_config.preload_lib), LOGIN_SHELL=bash)
+        env = {"LD_PRELOAD": str(sshd_config.preload_lib), "LOGIN_SHELL": bash}
     proc = command.run(
-        [sshd, "-f", sshd_config.path, "-D", "-p", str(port)], extra_env=env
+        [sshd, "-f", sshd_config.path, "-D", "-p", str(port)],
+        extra_env=env,
     )
 
     while True:
@@ -104,7 +107,8 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
                     "-p",
                     str(port),
                     "true",
-                ]
+                ],
+                check=False,
             ).returncode
             == 0
         ):
@@ -113,5 +117,6 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
         else:
             rc = proc.poll()
             if rc is not None:
-                raise Exception(f"sshd processes was terminated with {rc}")
+                msg = f"sshd processes was terminated with {rc}"
+                raise RuntimeError(msg)
             time.sleep(0.1)

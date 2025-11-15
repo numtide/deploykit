@@ -2,6 +2,7 @@ import os
 import pwd
 import subprocess
 
+import pytest
 from sshd import Sshd
 
 from deploykit import DeployGroup, DeployHost, HostKeyCheck, parse_hosts
@@ -10,7 +11,9 @@ from deploykit import DeployGroup, DeployHost, HostKeyCheck, parse_hosts
 def deploy_group(sshd: Sshd) -> DeployGroup:
     login = pwd.getpwuid(os.getuid()).pw_name
     return parse_hosts(
-        f"{login}@127.0.0.1:{sshd.port}", host_key_check=HostKeyCheck.NONE, key=sshd.key
+        f"{login}@127.0.0.1:{sshd.port}",
+        host_key_check=HostKeyCheck.NONE,
+        key=sshd.key,
     )
 
 
@@ -22,9 +25,9 @@ def test_run(sshd: Sshd) -> None:
 
 def test_run_environment(sshd: Sshd) -> None:
     g = deploy_group(sshd)
-    p1 = g.run("echo $env_var", stdout=subprocess.PIPE, extra_env=dict(env_var="true"))
+    p1 = g.run("echo $env_var", stdout=subprocess.PIPE, extra_env={"env_var": "true"})
     assert p1[0].result.stdout == "true\n"
-    p2 = g.run(["env"], stdout=subprocess.PIPE, extra_env=dict(env_var="true"))
+    p2 = g.run(["env"], stdout=subprocess.PIPE, extra_env={"env_var": "true"})
     assert "env_var=true" in p2[0].result.stdout
 
 
@@ -46,12 +49,8 @@ def test_run_function(sshd: Sshd) -> None:
 
 def test_timeout(sshd: Sshd) -> None:
     g = deploy_group(sshd)
-    try:
+    with pytest.raises(RuntimeError):
         g.run("sleep 10", timeout=0.01)
-    except Exception:
-        pass
-    else:
-        assert False, "should have raised TimeoutExpired"
 
 
 def test_run_exception(sshd: Sshd) -> None:
@@ -60,12 +59,8 @@ def test_run_exception(sshd: Sshd) -> None:
     r = g.run("exit 1", check=False)
     assert r[0].result.returncode == 1
 
-    try:
+    with pytest.raises(RuntimeError):
         g.run("exit 1")
-    except Exception:
-        pass
-    else:
-        assert False, "should have raised Exception"
 
 
 def test_run_function_exception(sshd: Sshd) -> None:
@@ -74,9 +69,5 @@ def test_run_function_exception(sshd: Sshd) -> None:
 
     g = deploy_group(sshd)
 
-    try:
+    with pytest.raises(RuntimeError):
         g.run_function(some_func)
-    except Exception:
-        pass
-    else:
-        assert False, "should have raised Exception"
