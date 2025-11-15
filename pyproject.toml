@@ -33,6 +33,13 @@ classifiers = [
 Homepage = "https://github.com/numtide/deploykit"
 Repository = "https://github.com/numtide/deploykit"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "mypy>=1.0",
+    "ruff>=0.1.0",
+]
+
 [tool.ruff]
 line-length = 88
 
