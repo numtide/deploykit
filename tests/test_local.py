@@ -1,5 +1,7 @@
 import subprocess
 
+import pytest
+
 from deploykit import DeployHost, parse_hosts, run
 
 
@@ -12,13 +14,8 @@ def test_run_failure() -> None:
     p = run("exit 1", check=False)
     assert p.returncode == 1
 
-    try:
+    with pytest.raises(subprocess.CalledProcessError):
         p = run("exit 1")
-    except Exception:
-        pass
-    else:
-        msg = "Command should have raised an error"
-        raise AssertionError(msg)
 
 
 def test_run_environment() -> None:
@@ -59,13 +56,8 @@ def test_run_local() -> None:
 
 def test_timeout() -> None:
     hosts = parse_hosts("some_host")
-    try:
+    with pytest.raises(RuntimeError):
         hosts.run_local("sleep 10", timeout=0.01)
-    except Exception:
-        pass
-    else:
-        msg = "should have raised TimeoutExpired"
-        raise AssertionError(msg)
 
 
 def test_run_function() -> None:
@@ -80,13 +72,8 @@ def test_run_function() -> None:
 
 def test_run_exception() -> None:
     hosts = parse_hosts("some_host")
-    try:
+    with pytest.raises(RuntimeError):
         hosts.run_local("exit 1")
-    except Exception:
-        pass
-    else:
-        msg = "should have raised Exception"
-        raise AssertionError(msg)
 
 
 def test_run_function_exception() -> None:
@@ -94,13 +81,8 @@ def test_run_function_exception() -> None:
         h.run_local("exit 1")
 
     hosts = parse_hosts("some_host")
-    try:
+    with pytest.raises(RuntimeError):
         hosts.run_function(some_func)
-    except Exception:
-        pass
-    else:
-        msg = "should have raised Exception"
-        raise AssertionError(msg)
 
 
 def test_run_local_non_shell() -> None:

@@ -1,5 +1,7 @@
 
 
+"""Execute commands remotely via ssh and locally in parallel with python."""
+
 import fcntl
 import logging
 import math
@@ -18,14 +20,8 @@ from threading import Thread
 from typing import (
     IO,
     Any,
-    Dict,
-    Generic,
-    List,
     Literal,
-    Optional,
-    Tuple,
     TypeVar,
-    Union,
     overload,
 )
 
@@ -34,20 +30,23 @@ DISABLE_COLOR = not sys.stderr.isatty() or os.environ.get("NO_COLOR", "") != ""
 
 
 def ansi_color(color: int) -> str:
+    """Return ANSI color escape sequence for the given color code."""
     return f"\x1b[{color}m"
 
 
 class CommandFormatter(logging.Formatter):
-    """print errors in red and warnings in yellow."""
+    """Print errors in red and warnings in yellow."""
 
     def __init__(self) -> None:
+        """Initialize formatter with color-coded output."""
         super().__init__(
             "%(prefix_color)s[%(command_prefix)s]%(color_reset)s %(color)s%(message)s%(color_reset)s",
         )
         self.hostnames: list[str] = []
         self.hostname_color_offset = 1  # first host shouldn't get agressive red
 
-    def formatMessage(self, record: logging.LogRecord) -> str:
+    def formatMessage(self, record: logging.LogRecord) -> str:  # noqa: N802
+        """Format log message with ANSI color codes based on log level."""
         colorcode = 0
         if record.levelno == logging.ERROR:
             colorcode = 31  # red
@@ -68,6 +67,7 @@ class CommandFormatter(logging.Formatter):
         return super().formatMessage(record)
 
     def hostname_colorcode(self, hostname: str) -> int:
+        """Get ANSI color code for hostname based on its index."""
         try:
             index = self.hostnames.index(hostname)
         except ValueError:
@@ -77,10 +77,13 @@ class CommandFormatter(logging.Formatter):
 
 
 def setup_loggers() -> tuple[logging.Logger, logging.Logger]:
-    # If we use the default logger here (logging.error etc) or a logger called
-    # "deploykit", then cmdlog messages are also posted on the default logger.
-    # To avoid this message duplication, we set up a main and command logger
-    # and use a "deploykit" main logger.
+    """Set up and return two loggers: one for main messages and one for command output.
+
+    If we use the default logger here (logging.error etc) or a logger called
+    "deploykit", then cmdlog messages are also posted on the default logger.
+    To avoid this message duplication, we set up a main and command logger
+    and use a "deploykit" main logger.
+    """
     kitlog = logging.getLogger("deploykit.main")
     kitlog.setLevel(logging.INFO)
 
@@ -126,13 +129,15 @@ def _pipe() -> Iterator[tuple[IO[str], IO[str]]]:
         write_end.close()
 
 
-FILE = Union[None, int]
+FILE = None | int
 
 # Seconds until a message is printed when _run produces no output.
 NO_OUTPUT_TIMEOUT = 20
 
 
 class HostKeyCheck(Enum):
+    """SSH host key verification modes."""
+
     # Strictly check ssh host keys, prompt for unknown ones
     STRICT = 0
     # Trust on ssh keys on first use
@@ -143,6 +148,8 @@ class HostKeyCheck(Enum):
 
 class DeployHost:
     
+
+    """Represents a host to deploy to via SSH or locally."""
 
     def __init__(
         self,
@@ -157,15 +164,20 @@ class DeployHost:
         verbose_ssh: bool = False,
         extra_ssh_opts: list[str] | None = None,
     ) -> None:
-        """Creates a DeployHost
-        @host the hostname to connect to via ssh
-        @port the port to connect to via ssh
-        @forward_agent: wheter to forward ssh agent
-        @command_prefix: string to prefix each line of the command output with, defaults to host
-        @host_key_check: wether to check ssh host keys
-        @verbose_ssh: Enables verbose logging on ssh connections
-        @meta: meta attributes associated with the host. Those can be accessed in custom functions passed to `run_function`
-        @extra_ssh_opts: Additional SSH options to use while connecting.
+        """Create a DeployHost instance.
+
+        Args:
+            host: The hostname to connect to via ssh
+            user: The user to connect as
+            port: The port to connect to via ssh
+            key: Path to SSH private key file
+            forward_agent: Whether to forward ssh agent
+            command_prefix: String to prefix each line of the command output with, defaults to host
+            host_key_check: Whether to check ssh host keys
+            meta: Meta attributes associated with the host. Those can be accessed in custom functions passed to `run_function`
+            verbose_ssh: Enables verbose logging on ssh connections
+            extra_ssh_opts: Additional SSH options to use while connecting
+
         """
         if extra_ssh_opts is None:
             extra_ssh_opts = []
@@ -185,6 +197,49 @@ class DeployHost:
         self.verbose_ssh = verbose_ssh
         self.extra_ssh_opts = extra_ssh_opts
 
+    def _log_output_lines(self, lines: list[str], is_err: bool) -> None:
+        """Log output lines with appropriate log level."""
+        for line in lines:
+            if is_err:
+                cmdlog.error(line, extra={"command_prefix": self.command_prefix})
+            else:
+                cmdlog.info(line, extra={"command_prefix": self.command_prefix})
+
+    def _read_and_log_fd(
+        self,
+        print_fd: IO[str],
+        print_buf: str,
+        rlist: list[IO[str]],
+        is_err: bool,
+    ) -> tuple[float, str]:
+        """Read from file descriptor and log complete lines."""
+        read = os.read(print_fd.fileno(), 4096)
+        if len(read) == 0:
+            rlist.remove(print_fd)
+        print_buf += read.decode("utf-8")
+
+        if (read == b"" and len(print_buf) != 0) or "\n" in print_buf:
+            lines = print_buf.rstrip("\n").split("\n")
+            self._log_output_lines(lines, is_err)
+            print_buf = ""
+
+        return (time.time(), print_buf)
+
+    def _read_fd_to_buffer(
+        self,
+        fd: IO[Any] | None,
+        ready_fds: list[IO[Any]],
+        rlist: list[IO[str]],
+    ) -> str:
+        """Read from file descriptor into buffer without logging."""
+        if fd and fd in ready_fds:
+            read = os.read(fd.fileno(), 4096)
+            if len(read) == 0:
+                rlist.remove(fd)
+            else:
+                return read.decode("utf-8")
+        return ""
+
     def _prefix_output(
         self,
         displayed_cmd: str,
@@ -194,16 +249,9 @@ class DeployHost:
         stderr: IO[str] | None,
         timeout: float = math.inf,
     ) -> tuple[str, str]:
-        rlist = []
-        if print_std_fd is not None:
-            rlist.append(print_std_fd)
-        if print_err_fd is not None:
-            rlist.append(print_err_fd)
-        if stdout is not None:
-            rlist.append(stdout)
-
-        if stderr is not None:
-            rlist.append(stderr)
+        rlist = [
+            fd for fd in [print_std_fd, print_err_fd, stdout, stderr] if fd is not None
+        ]
 
         print_std_buf = ""
         print_err_buf = ""
@@ -212,74 +260,80 @@ class DeployHost:
 
         start = time.time()
         last_output = time.time()
-        while len(rlist) != 0:
-            r, _, _ = select.select(rlist, [], [], min(timeout, NO_OUTPUT_TIMEOUT))
 
-            def print_from(
-                print_fd: IO[str],
-                print_buf: str,
-                is_err: bool = False,
-            ) -> tuple[float, str]:
-                read = os.read(print_fd.fileno(), 4096)
-                if len(read) == 0:
-                    rlist.remove(print_fd)
-                print_buf += read.decode("utf-8")
-                if (read == b"" and len(print_buf) != 0) or "\n" in print_buf:
-                    # print and empty the print_buf, if the stream is draining,
-                    # but there is still something in the buffer or on newline.
-                    lines = print_buf.rstrip("\n").split("\n")
-                    for line in lines:
-                        if not is_err:
-                            cmdlog.info(
-                                line,
-                                extra={"command_prefix": self.command_prefix},
-                            )
-                        else:
-                            cmdlog.error(
-                                line,
-                                extra={"command_prefix": self.command_prefix},
-                            )
-                    print_buf = ""
-                last_output = time.time()
-                return (last_output, print_buf)
+        while rlist:
+            ready_fds, _, _ = select.select(
+                rlist,
+                [],
+                [],
+                min(timeout, NO_OUTPUT_TIMEOUT),
+            )
 
-            if print_std_fd in r and print_std_fd is not None:
-                (last_output, print_std_buf) = print_from(
+            if print_std_fd in ready_fds and print_std_fd is not None:
+                last_output, print_std_buf = self._read_and_log_fd(
                     print_std_fd,
                     print_std_buf,
+                    rlist,
                     is_err=False,
                 )
-            if print_err_fd in r and print_err_fd is not None:
-                (last_output, print_err_buf) = print_from(
+
+            if print_err_fd in ready_fds and print_err_fd is not None:
+                last_output, print_err_buf = self._read_and_log_fd(
                     print_err_fd,
                     print_err_buf,
+                    rlist,
                     is_err=True,
                 )
 
             now = time.time()
-            elapsed = now - start
             if now - last_output > NO_OUTPUT_TIMEOUT:
+                elapsed = now - start
                 elapsed_msg = time.strftime("%H:%M:%S", time.gmtime(elapsed))
                 cmdlog.warn(
                     f"still waiting for '{displayed_cmd}' to finish... ({elapsed_msg} elapsed)",
                     extra={"command_prefix": self.command_prefix},
                 )
 
-            def handle_fd(fd: IO[Any] | None) -> str:
-                if fd and fd in r:
-                    read = os.read(fd.fileno(), 4096)
-                    if len(read) == 0:
-                        rlist.remove(fd)
-                    else:
-                        return read.decode("utf-8")
-                return ""
-
-            stdout_buf += handle_fd(stdout)
-            stderr_buf += handle_fd(stderr)
+            stdout_buf += self._read_fd_to_buffer(stdout, ready_fds, rlist)
+            stderr_buf += self._read_fd_to_buffer(stderr, ready_fds, rlist)
 
             if now - last_output >= timeout:
                 break
+
         return stdout_buf, stderr_buf
+
+    def _setup_output_pipe(
+        self,
+        stack: ExitStack,
+        requested: FILE,
+        write_default: IO[str] | None,
+    ) -> tuple[IO[str] | None, IO[str] | None]:
+        """Set up output pipe based on requested FILE parameter."""
+        if requested is None:
+            return (None, write_default)
+        if requested == subprocess.PIPE:
+            return stack.enter_context(_pipe())
+        msg = f"unsupported value for output parameter: {requested}"
+        raise ValueError(msg)
+
+    def _close_write_pipes(
+        self,
+        write_std_fd: IO[str] | None,
+        write_err_fd: IO[str] | None,
+        stdout: FILE,
+        stderr: FILE,
+        stdout_write: IO[str] | None,
+        stderr_write: IO[str] | None,
+    ) -> None:
+        """Close write ends of pipes after process starts."""
+        if write_std_fd is not None:
+            write_std_fd.close()
+        if write_err_fd is not None:
+            write_err_fd.close()
+        if stdout == subprocess.PIPE and stdout_write is not None:
+            stdout_write.close()
+        if stderr == subprocess.PIPE and stderr_write is not None:
+            stderr_write.close()
 
     def _run(
         self,
@@ -303,23 +357,16 @@ class DeployHost:
                 read_std_fd, write_std_fd = stack.enter_context(_pipe())
                 read_err_fd, write_err_fd = stack.enter_context(_pipe())
 
-            if stdout is None:
-                stdout_read = None
-                stdout_write = write_std_fd
-            elif stdout == subprocess.PIPE:
-                stdout_read, stdout_write = stack.enter_context(_pipe())
-            else:
-                msg = f"unsupported value for stdout parameter: {stdout}"
-                raise Exception(msg)
-
-            if stderr is None:
-                stderr_read = None
-                stderr_write = write_err_fd
-            elif stderr == subprocess.PIPE:
-                stderr_read, stderr_write = stack.enter_context(_pipe())
-            else:
-                msg = f"unsupported value for stderr parameter: {stderr}"
-                raise Exception(msg)
+            stdout_read, stdout_write = self._setup_output_pipe(
+                stack,
+                stdout,
+                write_std_fd,
+            )
+            stderr_read, stderr_write = self._setup_output_pipe(
+                stack,
+                stderr,
+                write_err_fd,
+            )
 
             env = os.environ.copy()
             env.update(extra_env)
@@ -333,16 +380,14 @@ class DeployHost:
                 env=env,
                 cwd=cwd,
             ) as p:
-                if write_std_fd is not None:
-                    write_std_fd.close()
-                if write_err_fd is not None:
-                    write_err_fd.close()
-                if stdout == subprocess.PIPE:
-                    assert stdout_write is not None
-                    stdout_write.close()
-                if stderr == subprocess.PIPE:
-                    assert stderr_write is not None
-                    stderr_write.close()
+                self._close_write_pipes(
+                    write_std_fd,
+                    write_err_fd,
+                    stdout,
+                    stderr,
+                    stdout_write,
+                    stderr_write,
+                )
 
                 start = time.time()
                 stdout_data, stderr_data = self._prefix_output(
@@ -358,14 +403,14 @@ class DeployHost:
                 except subprocess.TimeoutExpired:
                     p.kill()
                     raise
+                if ret != 0 and check:
+                    raise subprocess.CalledProcessError(
+                        ret,
+                        cmd=cmd,
+                        output=stdout_data,
+                        stderr=stderr_data,
+                    )
                 if ret != 0:
-                    if check:
-                        raise subprocess.CalledProcessError(
-                            ret,
-                            cmd=cmd,
-                            output=stdout_data,
-                            stderr=stderr_data,
-                        )
                     cmdlog.warning(
                         f"[Command failed: {ret}] {displayed_cmd}",
                         extra={"command_prefix": self.command_prefix},
@@ -421,6 +466,37 @@ class DeployHost:
             timeout=timeout,
         )
 
+    def _build_export_cmd(self, extra_env: dict[str, str]) -> str:
+        """Build export command for environment variables."""
+        if not extra_env:
+            return ""
+        env_vars = [f"{shlex.quote(k)}={shlex.quote(v)}" for k, v in extra_env.items()]
+        return f"export {shlex.join(env_vars)}; "
+
+    def _build_displayed_cmd(self, cmd: str | list[str], export_cmd: str) -> str:
+        """Build command string for display in logs."""
+        displayed_cmd = export_cmd
+        if isinstance(cmd, list):
+            displayed_cmd += shlex.join(cmd)
+        else:
+            displayed_cmd += cmd
+        return displayed_cmd
+
+    def _build_ssh_opts(self, verbose_ssh: bool) -> list[str]:
+        """Build SSH options list."""
+        ssh_opts = ["-A"] if self.forward_agent else []
+        if self.port:
+            ssh_opts.extend(["-p", str(self.port)])
+        if self.key:
+            ssh_opts.extend(["-i", self.key])
+        if self.host_key_check != HostKeyCheck.STRICT:
+            ssh_opts.extend(["-o", "StrictHostKeyChecking=no"])
+        if self.host_key_check == HostKeyCheck.NONE:
+            ssh_opts.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        if verbose_ssh or self.verbose_ssh:
+            ssh_opts.extend(["-v"])
+        return ssh_opts
+
     def run(
         self,
         cmd: str | list[str],
@@ -448,50 +524,24 @@ class DeployHost:
         """
         if extra_env is None:
             extra_env = {}
-        sudo = ""
-        if become_root and self.user != "root":
-            sudo = "sudo -- "
-        vars = []
-        for k, v in extra_env.items():
-            vars.append(f"{shlex.quote(k)}={shlex.quote(v)}")
 
-        displayed_cmd = ""
-        export_cmd = ""
-        if vars:
-            export_cmd = f"export {shlex.join(vars)}; "
-            displayed_cmd += export_cmd
-        if isinstance(cmd, list):
-            displayed_cmd += shlex.join(cmd)
-        else:
-            displayed_cmd += cmd
-        cmdlog.info(
-            f"$ {displayed_cmd}",
-            extra={"command_prefix": self.command_prefix},
-        )
+        sudo = "sudo -- " if become_root and self.user != "root" else ""
+        export_cmd = self._build_export_cmd(extra_env)
+        displayed_cmd = self._build_displayed_cmd(cmd, export_cmd)
+
+        cmdlog.info(f"$ {displayed_cmd}", extra={"command_prefix": self.command_prefix})
 
         ssh_target = f"{self.user}@{self.host}" if self.user is not None else self.host
-
-        ssh_opts = ["-A"] if self.forward_agent else []
-        if self.port:
-            ssh_opts.extend(["-p", str(self.port)])
-        if self.key:
-            ssh_opts.extend(["-i", self.key])
-
-        if self.host_key_check != HostKeyCheck.STRICT:
-            ssh_opts.extend(["-o", "StrictHostKeyChecking=no"])
-        if self.host_key_check == HostKeyCheck.NONE:
-            ssh_opts.extend(["-o", "UserKnownHostsFile=/dev/null"])
-        if verbose_ssh or self.verbose_ssh:
-            ssh_opts.extend(["-v"])
+        ssh_opts = self._build_ssh_opts(verbose_ssh)
 
         bash_cmd = export_cmd
         bash_args = []
         if isinstance(cmd, list):
             bash_cmd += 'exec "$@"'
-            bash_args += cmd
+            bash_args = cmd
         else:
             bash_cmd += cmd
-        # FIXME we assume bash to be present here? Should be documented...
+
         ssh_cmd = [
             "ssh",
             ssh_target,
@@ -516,7 +566,10 @@ T = TypeVar("T")
 
 
 class HostResult[T]:
+    """Result of running a command on a host, wrapping either a successful result or an exception."""
+
     def __init__(self, host: DeployHost, result: T | Exception) -> None:
+        """Initialize HostResult with host and result/exception."""
         self.host = host
         self._result = result
 
@@ -546,13 +599,16 @@ def _worker(
 ) -> None:
     try:
         results[idx] = HostResult(host, func(host))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         kitlog.exception(e)
         results[idx] = HostResult(host, e)
 
 
 class DeployGroup:
+    """Group of deployment hosts for executing commands in parallel."""
+
     def __init__(self, hosts: list[DeployHost]) -> None:
+        """Initialize DeployGroup with a list of hosts."""
         self.hosts = hosts
 
     def _run_local(
@@ -565,7 +621,7 @@ class DeployGroup:
         extra_env: dict[str, str] | None = None,
         cwd: None | str | Path = None,
         check: bool = True,
-        verbose_ssh: bool = False,
+        verbose_ssh: bool = False,  # noqa: ARG002
         timeout: float = math.inf,
     ) -> None:
         if extra_env is None:
@@ -581,7 +637,7 @@ class DeployGroup:
                 timeout=timeout,
             )
             results.append(HostResult(host, proc))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             kitlog.exception(e)
             results.append(HostResult(host, e))
 
@@ -612,7 +668,7 @@ class DeployGroup:
                 timeout=timeout,
             )
             results.append(HostResult(host, proc))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             kitlog.exception(e)
             results.append(HostResult(host, e))
 
@@ -628,7 +684,7 @@ class DeployGroup:
                 errors += 1
         if errors > 0:
             msg = f"{errors} hosts failed with an error. Check the logs above"
-            raise Exception(
+            raise RuntimeError(
                 msg,
             )
 
@@ -687,7 +743,8 @@ class DeployGroup:
         verbose_ssh: bool = False,
         timeout: float = math.inf,
     ) -> DeployResults:
-        """Command to run on the remote host via ssh
+        """Command to run on the remote host via ssh.
+
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
         @cwd current working directory to run the process in
@@ -719,7 +776,8 @@ class DeployGroup:
         check: bool = True,
         timeout: float = math.inf,
     ) -> DeployResults:
-        """Command to run locally for each host in the group in parallel
+        """Command to run locally for each host in the group in parallel.
+
         @cmd the commmand to run
         @stdout if not None stdout of the command will be redirected to this file i.e. stdout=subprocss.PIPE
         @stderr if not None stderr of the command will be redirected to this file i.e. stderr=subprocess.PIPE
@@ -747,7 +805,7 @@ class DeployGroup:
         func: Callable[[DeployHost], T],
         check: bool = True,
     ) -> list[HostResult[T]]:
-        """Function to run for each host in the group in parallel.
+        """Run function for each host in the group in parallel.
 
         @func the function to call
         """

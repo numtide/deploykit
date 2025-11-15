@@ -2,6 +2,7 @@ import os
 import pwd
 import subprocess
 
+import pytest
 from sshd import Sshd
 
 from deploykit import DeployGroup, DeployHost, HostKeyCheck, parse_hosts
@@ -48,13 +49,8 @@ def test_run_function(sshd: Sshd) -> None:
 
 def test_timeout(sshd: Sshd) -> None:
     g = deploy_group(sshd)
-    try:
+    with pytest.raises(RuntimeError):
         g.run("sleep 10", timeout=0.01)
-    except Exception:
-        pass
-    else:
-        msg = "should have raised TimeoutExpired"
-        raise AssertionError(msg)
 
 
 def test_run_exception(sshd: Sshd) -> None:
@@ -63,13 +59,8 @@ def test_run_exception(sshd: Sshd) -> None:
     r = g.run("exit 1", check=False)
     assert r[0].result.returncode == 1
 
-    try:
+    with pytest.raises(RuntimeError):
         g.run("exit 1")
-    except Exception:
-        pass
-    else:
-        msg = "should have raised Exception"
-        raise AssertionError(msg)
 
 
 def test_run_function_exception(sshd: Sshd) -> None:
@@ -78,10 +69,5 @@ def test_run_function_exception(sshd: Sshd) -> None:
 
     g = deploy_group(sshd)
 
-    try:
+    with pytest.raises(RuntimeError):
         g.run_function(some_func)
-    except Exception:
-        pass
-    else:
-        msg = "should have raised Exception"
-        raise AssertionError(msg)

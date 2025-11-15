@@ -3,11 +3,11 @@ import os
 import signal
 import subprocess
 from collections.abc import Iterator
-from typing import IO, Any, Union
+from typing import IO, Any
 
 import pytest
 
-_FILE = Union[None, int, IO[Any]]
+_FILE = None | int | IO[Any]
 
 
 class Command:

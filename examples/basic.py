@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Basic example demonstrating deploykit usage for remote and local command execution."""
 
 import argparse
 import subprocess

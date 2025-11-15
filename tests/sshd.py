@@ -30,8 +30,8 @@ class SshdConfig:
 def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
     # FIXME, if any parent of `project_root` is world-writable than sshd will refuse it.
     with TemporaryDirectory(dir=project_root) as _dir:
-        dir = Path(_dir)
-        host_key = dir / "host_ssh_host_ed25519_key"
+        tmp_dir = Path(_dir)
+        host_key = tmp_dir / "host_ssh_host_ed25519_key"
         subprocess.run(
             [
                 "ssh-keygen",
@@ -45,7 +45,7 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
             check=True,
         )
 
-        sshd_config = dir / "sshd_config"
+        sshd_config = tmp_dir / "sshd_config"
         sshd_config.write_text(
             f"""
         HostKey {host_key}
@@ -60,7 +60,7 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
         lib_path = None
         if platform == "linux":
             # This enforces a login shell by overriding the login shell of `getpwnam(3)`
-            lib_path = str(dir / "libgetpwnam-preload.so")
+            lib_path = str(tmp_dir / "libgetpwnam-preload.so")
             subprocess.run(
                 [
                     os.environ.get("CC", "cc"),
@@ -77,7 +77,9 @@ def sshd_config(project_root: Path, test_root: Path) -> Iterator[SshdConfig]:
 
 @pytest.fixture
 def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Sshd]:
-    port = ports.allocate(1)
+    sock = ports.allocate()
+    port = sock.getsockname()[1]
+    sock.close()  # Release the port so sshd can bind to it
     sshd = shutil.which("sshd")
     assert sshd is not None, "no sshd binary found"
     env = {}
@@ -116,5 +118,5 @@ def sshd(sshd_config: SshdConfig, command: Command, ports: Ports) -> Iterator[Ss
             rc = proc.poll()
             if rc is not None:
                 msg = f"sshd processes was terminated with {rc}"
-                raise Exception(msg)
+                raise RuntimeError(msg)
             time.sleep(0.1)
