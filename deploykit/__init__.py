@@ -761,8 +761,7 @@ def run(
     extra_env: Dict[str, str] = ...,
     cwd: Union[None, str, Path] = ...,
     check: bool = ...,
-) -> subprocess.CompletedProcess[str]:
-    ...
+) -> subprocess.CompletedProcess[str]: ...
 
 
 @overload
@@ -774,8 +773,7 @@ def run(
     extra_env: Dict[str, str] = ...,
     cwd: Union[None, str, Path] = ...,
     check: bool = ...,
-) -> subprocess.CompletedProcess[bytes]:
-    ...
+) -> subprocess.CompletedProcess[bytes]: ...
 
 
 def run(
