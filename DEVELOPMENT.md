@@ -1,42 +1,77 @@
 # Development
 
 You will need python3 and openssh installed at a minimum.
-Optionally the following python tools are required:
 
-- flake8
-- black
-- pytest
-- mypy
+## Setup
 
-Clone the project:
+### Using Nix (Recommended)
+
+The easiest way to get started is using Nix:
 
 ```console
 $ git clone git@github.com:numtide/deploykit.git
+$ cd deploykit
+$ nix develop
 ```
 
-To run test, you need to install [pytest](https://pytest.org):
+This will provide all necessary dependencies including pytest, mypy, and ruff.
+
+### Without Nix
+
+Clone the project and install in development mode:
+
+```console
+$ git clone git@github.com:numtide/deploykit.git
+$ cd deploykit
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -e '.[dev]'
+```
+
+This will install deploykit in editable mode along with all development dependencies.
+
+## Running Tests
+
+To run tests, you need [pytest](https://pytest.org):
 
 ```console
 $ pytest ./tests
 ```
 
-The project also is fully typechecked with [mypy](http://www.mypy-lang.org/).
-You can run the typechecking like this
+## Code Quality
+
+The project uses modern Python tooling:
+
+- **Type checking** with [mypy](http://www.mypy-lang.org/)
+- **Formatting** with [ruff](https://docs.astral.sh/ruff/)
+- **Linting** with [ruff](https://docs.astral.sh/ruff/)
+
+### Using treefmt (Recommended)
+
+Run all formatters and linters at once (if you have nix installed)
 
 ```console
-$ MYPYPATH=$(pwd):$(pwd)/tests mypy --strict --namespace-packages --explicit-package-bases .
+$ nix fmt
 ```
 
-Furthermore all code is formated with black:
+### Manual Usage
+
+Type checking:
 
 ```console
-$ black .
+$ mypy deploykit tests
 ```
 
-and linted with flake8:
+Formatting:
 
 ```console
-$ flake8 .
+$ ruff format .
+```
+
+Linting:
+
+```console
+$ ruff check --fix .
 ```
 
 ## Logging
