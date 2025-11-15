@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "deploykit"
@@ -32,15 +32,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/numtide/deploykit"
 Repository = "https://github.com/numtide/deploykit"
-
-[tool.setuptools]
-zip-safe = true
-
-[tool.setuptools.packages.find]
-include = ["deploykit*"]
-
-[tool.setuptools.package-data]
-"*" = ["py.typed"]
 
 [tool.ruff]
 line-length = 88
