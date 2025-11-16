@@ -1,11 +1,16 @@
+from __future__ import annotations
+
 import os
 import pwd
 import subprocess
+from typing import TYPE_CHECKING
 
 import pytest
 
 from deploykit import DeployGroup, DeployHost, HostKeyCheck, parse_hosts
-from tests.sshd import Sshd
+
+if TYPE_CHECKING:
+    from conftest import Sshd
 
 
 def deploy_group(sshd: Sshd) -> DeployGroup:

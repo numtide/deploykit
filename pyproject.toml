@@ -61,6 +61,7 @@ ignore = [
 "tests/**/*.py" = [
     "S101",   # use of assert in tests is expected
     "D",      # no docstrings required in tests
+    "INP001", # tests directory is not a package (pytest best practice)
 ]
 "examples/**/*.py" = [
     "D103",    # no docstrings required in examples

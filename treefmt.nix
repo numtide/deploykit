@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 {
   projectRootFile = "flake.lock";
 
@@ -7,8 +7,7 @@
   programs.ruff.check = true;
   programs.mypy.enable = true;
   programs.mypy.directories = {
-    "deploykit" = { };
-    "tests" = {
+    "." = {
       extraPythonPackages = with pkgs.python3.pkgs; [
         pytest
       ];
