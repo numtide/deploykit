@@ -25,12 +25,23 @@ python";
         "aarch64-darwin"
       ];
       perSystem =
-        { self', pkgs, ... }:
+        { self'
+        , pkgs
+        , lib
+        , ...
+        }:
         {
           packages.deploykit = pkgs.python3.pkgs.callPackage ./nix/default.nix { };
           packages.default = self'.packages.deploykit;
           devShells.default = pkgs.callPackage ./nix/shell.nix { };
           treefmt = ./treefmt.nix;
+
+          checks =
+            let
+              packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self'.packages;
+              devShells = lib.mapAttrs' (n: lib.nameValuePair "devShell-${n}") self'.devShells;
+            in
+            packages // devShells;
         };
     }).config.flake;
 }
