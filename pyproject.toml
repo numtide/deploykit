@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deploykit"
-version = "1.2.0"
+version = "1.2.1"
 description = "Execute commands remote via ssh and locally in parallel with python"
 readme = "README.md"
 requires-python = ">=3.13"
