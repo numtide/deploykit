@@ -1,6 +1,6 @@
 { buildPythonPackage
 , mypy
-, setuptools
+, hatchling
 , glibcLocales
 , pytestCheckHook
 , openssh
@@ -13,8 +13,10 @@ buildPythonPackage {
   name = "deploykit";
   src = ./..;
 
-  buildInputs = [
-    setuptools
+  pyproject = true;
+
+  build-system = [
+    hatchling
   ];
 
   nativeCheckInputs = [ openssh mypy bash glibcLocales pytestCheckHook ];
