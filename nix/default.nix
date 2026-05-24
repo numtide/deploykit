@@ -23,7 +23,7 @@ buildPythonPackage {
   disabledTests = lib.optionals stdenv.isDarwin [ "test_ssh" ];
 
   # don't swallow stdout/stderr
-  pytestFlagsArray = [ "-s" ];
+  pytestFlags = [ "-s" ];
   meta = with lib; {
     description = "Execute commands remote via ssh and locally in parallel with python";
     homepage = "https://github.com/numtide/deploykit";
